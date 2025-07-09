@@ -93,10 +93,8 @@ def auto_detect_zone(easting, northing):
             lon, lat = transformer.transform(easting, northing)
             
             # 変換後の緯度経度が日本の範囲内にあるかチェック
-            if (
-                japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and
-                japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]
-            ):
+            if (japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and
+                japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]):
                 candidates.append({"zone": z_, "epsg": epsg_code, "lat": lat, "lon": lon})
         except Exception:
             continue
@@ -119,7 +117,7 @@ def parse_coordinate_input(input_string):
     coordinates = []
     # Define delimiters for separating multiple coordinate sets on a single line
     # Using a regex pattern to split by any of these delimiters
-    coordinate_set_delimiters = r',,|,、|　　|//' # ,, or 、、 or double space or //
+    coordinate_set_delimiters = r',,|,、|  |　　|//' # ,, or 、、 or double half-width space or double full-width space or //
 
     for line_num, line in enumerate(input_string.splitlines(), 1):
         # Split the line into potential coordinate sets
@@ -178,16 +176,17 @@ else:
     st.write("最大500個の座標を一括で変換できます。")
 
     coordinate_input_text = st.text_area(
-        '**X (Easting), Y (Northing), Z (標高)** の順で座標を入力してください。\n\n'
+        '**X (Easting), Y (Northing), Z (標高)** の順で座標を入力してください.\n\n'
         '1行に1座標ずつ入力するか、または1行に複数の座標を横並びで入力できます。\n'
         '数値はスペース、カンマ、タブなどで区切ってください。\n'
-        '複数の座標セットを1行に入力する場合は、`,,`、`、、`、`  `(半角スペース2つ)、`//` のいずれかで区切ってください。\n\n'
+        '複数の座標セットを1行に入力する場合は、`,,`、`、、`、`  `(半角スペース2つ)、`　　`(全角スペース2つ)、`//` のいずれかで区切ってください。\n\n'
         '例:\n'
-        '`-36258.580  -147524.100  35.550`\n'
-        '`X=-36258.580, Y=-147524.100, Z=35.550`\n'
-        '`-36258.580 -147524.100 35.550,, -36250.000 -147500.000 40.000`\n'
-        '`-36258.580 -147524.100 35.550// -36250.000 -147500.000 40.000`',
-        height=200
+        '`10000 20000 100`\n'
+        '`X=10000, Y=20000, Z=100`\n'
+        '`10000 20000 100,, 10000 20000 100`\n'
+        '`10000 20000 100  10000 20000 100` (半角スペース2つで区切り)\n'
+        '`10000 20000 100// 10000 20000 100`',
+        height=250 # Increased height to accommodate more examples
     )
 
     # 入力オプション
@@ -227,10 +226,8 @@ else:
                         lon, lat = transformer.transform(easting, northing)
                         
                         # 日本の範囲内かチェック
-                        if (
-                            japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and
-                            japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]
-                        ):
+                        if (japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and
+                            japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]):
                             result_info = {"zone": zone_input, "epsg": epsg_code, "lat": lat, "lon": lon, "auto_detected": False}
                         else:
                             # 指定された系で変換すると日本の範囲外になる場合
