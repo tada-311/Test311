@@ -93,8 +93,10 @@ def auto_detect_zone(easting, northing):
             lon, lat = transformer.transform(easting, northing)
             
             # 変換後の緯度経度が日本の範囲内にあるかチェック
-            if (japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and
-                japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]):
+            if (
+                japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and
+                japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]
+            ):
                 candidates.append({"zone": z_, "epsg": epsg_code, "lat": lat, "lon": lon})
         except Exception:
             continue
@@ -115,25 +117,35 @@ def auto_detect_zone(easting, northing):
 def parse_coordinate_input(input_string):
     """入力文字列から座標リストを抽出する"""
     coordinates = []
-    # 1行ずつ処理
+    # Define delimiters for separating multiple coordinate sets on a single line
+    # Using a regex pattern to split by any of these delimiters
+    coordinate_set_delimiters = r',,|,、|　　|//' # ,, or 、、 or double space or //
+
     for line_num, line in enumerate(input_string.splitlines(), 1):
-        # 行から数値を抽出
-        found_numbers = re.findall(r'[-+]?\d*\.?\d+', line)
-        
-        if len(found_numbers) == 3:
-            # X, Y, Z の順で解釈 (Easting, Northing, Height)
-            easting = float(found_numbers[0])
-            northing = float(found_numbers[1])
-            z = float(found_numbers[2])
-            coordinates.append({'easting': easting, 'northing': northing, 'z': z})
-        elif len(found_numbers) > 3:
-            easting = float(found_numbers[0])
-            northing = float(found_numbers[1])
-            z = float(found_numbers[2])
-            coordinates.append({'easting': easting, 'northing': northing, 'z': z})
-            st.warning(f"⚠️ {line_num}行目: 3つより多くの数値が見つかりました。最初の3つ ({easting}, {northing}, {z}) を使用します。")
-        elif len(found_numbers) > 0:
-            st.warning(f"⚠️ {line_num}行目: 座標の数値が3つではありません。スキップされます。: `{line}`")
+        # Split the line into potential coordinate sets
+        # This will handle cases like "X Y Z,,X2 Y2 Z2"
+        coordinate_sets_on_line = re.split(coordinate_set_delimiters, line.strip())
+
+        for coord_set_str in coordinate_sets_on_line:
+            if not coord_set_str.strip(): # Skip empty strings resulting from split
+                continue
+
+            # Extract numbers from each coordinate set string
+            found_numbers = re.findall(r'[-+]?\d*\.?\d+', coord_set_str)
+
+            if len(found_numbers) == 3:
+                easting = float(found_numbers[0])
+                northing = float(found_numbers[1])
+                z = float(found_numbers[2])
+                coordinates.append({'easting': easting, 'northing': northing, 'z': z})
+            elif len(found_numbers) > 3:
+                easting = float(found_numbers[0])
+                northing = float(found_numbers[1])
+                z = float(found_numbers[2])
+                coordinates.append({'easting': easting, 'northing': northing, 'z': z})
+                st.warning(f"⚠️ {line_num}行目: 座標セット '{coord_set_str}' に3つより多くの数値が見つかりました。最初の3つ ({easting}, {northing}, {z}) を使用します。")
+            elif len(found_numbers) > 0:
+                st.warning(f"⚠️ {line_num}行目: 座標セット '{coord_set_str}' の数値が3つではありません。スキップされます。")
 
     return coordinates
 
@@ -167,11 +179,15 @@ else:
 
     coordinate_input_text = st.text_area(
         '**X (Easting), Y (Northing), Z (標高)** の順で座標を入力してください。\n\n'
-        '1行に1座標ずつ入力します。数値はスペース、カンマ、タブなどで区切ってください。\n\n'
+        '1行に1座標ずつ入力するか、または1行に複数の座標を横並びで入力できます。\n'
+        '数値はスペース、カンマ、タブなどで区切ってください。\n'
+        '複数の座標セットを1行に入力する場合は、`,,`、`、、`、`  `(半角スペース2つ)、`//` のいずれかで区切ってください。\n\n'
         '例:\n'
         '`-36258.580  -147524.100  35.550`\n'
-        '`X=-36258.580, Y=-147524.100, Z=35.550`',
-        height=150
+        '`X=-36258.580, Y=-147524.100, Z=35.550`\n'
+        '`-36258.580 -147524.100 35.550,, -36250.000 -147500.000 40.000`\n'
+        '`-36258.580 -147524.100 35.550// -36250.000 -147500.000 40.000`',
+        height=200
     )
 
     # 入力オプション
@@ -211,8 +227,10 @@ else:
                         lon, lat = transformer.transform(easting, northing)
                         
                         # 日本の範囲内かチェック
-                        if (japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and
-                            japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]):
+                        if (
+                            japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and
+                            japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]
+                        ):
                             result_info = {"zone": zone_input, "epsg": epsg_code, "lat": lat, "lon": lon, "auto_detected": False}
                         else:
                             # 指定された系で変換すると日本の範囲外になる場合
