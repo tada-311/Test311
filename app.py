@@ -165,7 +165,7 @@ else:
     st.subheader("座標入力")
     st.write("複数の座標を入力できます。")
     st.write("例: `X1,Y1,Z1/X2,Y2,Z2` またはExcelからのコピー＆ペースト（縦並び、横並び、単位の有無に対応）")
-    st.write("最大500個の座標まで対応。")
+        st.write("最大500個の座標まで対応。")
 
     coordinate_input_text = st.text_area(
         'X, Y, Z 座標を入力してください (各座標はカンマ、スペース、タブ、改行で区切る。単位やラベルは自動で無視されます)',
@@ -220,7 +220,8 @@ else:
                     st.write(f"入力: X={northing}, Y={easting}, Z={z}")
 
                     if result:
-                        # ジオイド高を自動取得
+                        ellipsoidal_height = None # Initialize ellipsoidal_height
+                    # ジオイド高を自動取得
                         auto_geoid_height = get_geoid_height(result['lat'], result['lon'], geoid_heights, lat_start, lon_start, lat_interval, lon_interval)
 
                         if auto_geoid_height is not None:
@@ -245,6 +246,7 @@ else:
                         st.error("⚠️ 有効な座標変換結果が得られませんでした。座標または系番号が正しいか確認してください。")
                 else: # 要約表示
                     if result:
-                        st.write(f"点{i+1}: 入力 X={northing:.2f}, Y={easting:.2f}, Z={z:.2f} -> 緯度={result['lat']:.6f}, 経度={result['lon']:.6f}")
+                        ellipsoidal_height_str = f"{ellipsoidal_height:.2f}" if ellipsoidal_height is not None else "N/A"
+                        st.write(f"点{i+1}: 入力 X={northing:.2f}, Y={easting:.2f}, Z={z:.2f} -> 緯度={result['lat']:.6f}, 経度={result['lon']:.6f}, 楕円体高={ellipsoidal_height_str} m")
                     else:
                         st.warning(f"点{i+1}: 変換失敗 - 入力 X={northing:.2f}, Y={easting:.2f}, Z={z:.2f}")
