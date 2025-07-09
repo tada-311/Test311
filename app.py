@@ -165,7 +165,7 @@ else:
     st.subheader("座標入力")
     st.write("複数の座標を入力できます。")
     st.write("例: `X1,Y1,Z1/X2,Y2,Z2` またはExcelからのコピー＆ペースト（縦並び、横並び、単位の有無に対応）")
-    st.write("最大10個の座標まで対応。")
+    st.write("最大500個の座標まで対応。")
 
     coordinate_input_text = st.text_area(
         'X, Y, Z 座標を入力してください (各座標はカンマ、スペース、タブ、改行で区切る。単位やラベルは自動で無視されます)',
@@ -182,8 +182,8 @@ else:
 
         if not coordinates_to_convert:
             st.warning("⚠️ 変換する座標が入力されていません。")
-        elif len(coordinates_to_convert) > 10:
-            st.warning(f"⚠️ 入力された座標の数が多すぎます ({len(coordinates_to_convert)}個)。最大10個までです。")
+        elif len(coordinates_to_convert) > 500:
+            st.warning(f"⚠️ 入力された座標の数が多すぎます ({len(coordinates_to_convert)}個)。最大500個までです。")
         else:
             st.subheader("=== 座標変換結果（WGS84） ===")
             for i, coord in enumerate(coordinates_to_convert):
