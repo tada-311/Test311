@@ -223,6 +223,11 @@ else:
                         ellipsoidal_height = None # Initialize ellipsoidal_height
                     
 
+                        if result:
+                        ellipsoidal_height = None # Initialize ellipsoidal_height
+                        # ジオイド高を自動取得
+                        auto_geoid_height = get_geoid_height(result['lat'], result['lon'], geoid_heights, lat_start, lon_start, lat_interval, lon_interval)
+
                         if auto_geoid_height is not None:
                             ellipsoidal_height = z + auto_geoid_height
                             st.write(f"系番号: 第{result['zone']}系")
