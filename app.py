@@ -31,13 +31,18 @@ def load_geoid_data(file_path):
     with open(file_path, 'r') as f:
         # ヘッダー情報の読み込み
         header = f.readline().split()
-        lat_start, lon_start = float(header[0]), float(header[1])
-        lat_interval, lon_interval = float(header[2]), float(header[3])
-        num_lat, num_lon = int(header[4]), int(header[5])
+        lat_start = float(header[0])
+        lon_start = float(header[1])
+        lat_interval = float(header[2])
+        lon_interval = float(header[3])
+        num_lat = int(header[4])
+        num_lon = int(header[5])
 
-        # ジオイド高データの読み込み
-        data = np.loadtxt(f)
-        geoid_heights = data.flatten().reshape(num_lat, num_lon)
+        data = []
+        for line in f:
+            data.extend(map(float, line.split()))
+
+        geoid_heights = np.array(data).reshape(num_lat, num_lon)
 
     return geoid_heights, lat_start, lon_start, lat_interval, lon_interval
 
