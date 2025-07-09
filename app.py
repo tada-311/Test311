@@ -215,33 +215,10 @@ else:
                     except Exception:
                         result = None
 
-                if display_mode == "詳細表示":
-                    st.markdown(f"--- **座標 {i+1}** ---")
-                    st.write(f"入力: X={northing}, Y={easting}, Z={z}")
+                if result:
+                    ellipsoidal_height = None # Initialize ellipsoidal_height
+                    # ジオイド高を自動取得
+                    auto_geoid_height = get_geoid_height(result['lat'], result['lon'], geoid_heights, lat_start, lon_start, lat_interval, lon_interval)
 
-                    if result:
-                        if auto_geoid_height is not None:
-                            st.write(f"系番号: 第{result['zone']}系")
-                            st.write(f"EPSGコード: {result['epsg']}")
-                            st.write(f"緯度（北緯）: {result['lat']:.15f}")
-                            st.write(f"経度（東経）: {result['lon']:.15f}")
-                            st.write(f"自動取得ジオイド高: {auto_geoid_height:.15f} m")
-                            st.write(f"楕円体高（Z + 自動取得ジオイド高）: {ellipsoidal_height:.15f} m")
-                            if result.get("auto_detected", False):
-                                st.info("※ 系番号は自動判別されました。")
-                        else:
-                            st.warning("⚠️ ジオイド高の自動取得に失敗しました。座標がジオイドモデルの範囲内か確認してください。")
-                            st.write(f"系番号: 第{result['zone']}系")
-                            st.write(f"EPSGコード: {result['epsg']}")
-                            st.write(f"緯度（北緯）: {result['lat']:.15f}")
-                            st.write(f"経度（東経）: {result['lon']:.15f}")
-                            st.warning("ジオイド高が自動取得できなかったため、楕円体高は計算できませんでした。")
-
-                    else:
-                        st.error("⚠️ 有効な座標変換結果が得られませんでした。座標または系番号が正しいか確認してください。")
-                else: # 要約表示
-                    if result:
-                        ellipsoidal_height_str = f"{ellipsoidal_height:.2f}" if ellipsoidal_height is not None else "N/A"
-                        st.write(f"点{i+1}: 入力 X={northing:.2f}, Y={easting:.2f}, Z={z:.2f} -> 緯度={result['lat']:.6f}, 経度={result['lon']:.6f}, 楕円体高={ellipsoidal_height_str} m")
-                    else:
-                        st.warning(f"点{i+1}: 変換失敗 - 入力 X={northing:.2f}, Y={easting:.2f}, Z={z:.2f}")
+                    if auto_geoid_height is not None:
+                        ellipsoidal_height = z + auto_geoid_height
