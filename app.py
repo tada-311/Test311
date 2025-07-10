@@ -132,18 +132,16 @@ def parse_coordinate_text(input_string):
         # 行から数値を抽出
         found_numbers = re.findall(r'[-+]?\d*\.?\d+', line)
         
-        if len(found_numbers) == 2:
+        if len(found_numbers) >= 2:
             # X, Y の順で解釈 (Easting, Northing)
             easting = float(found_numbers[0])
             northing = float(found_numbers[1])
-            coordinates.append({'easting': easting, 'northing': northing})
-        elif len(found_numbers) > 2:
-            easting = float(found_numbers[0])
-            northing = float(found_numbers[1])
-            coordinates.append({'easting': easting, 'northing': northing})
-            st.warning(f"⚠️ {line_num}行目: 2つより多くの数値が見つかりました。最初の2つ ({easting}, {northing}) を使用します。")
+            z = float(found_numbers[2]) if len(found_numbers) >= 3 else 0.0 # Zがあれば取得、なければ0.0
+            coordinates.append({'easting': easting, 'northing': northing, 'z': z})
+            if len(found_numbers) > 3:
+                st.warning(f"⚠️ {line_num}行目: 3つより多くの数値が見つかりました。最初の3つ ({easting}, {northing}, {z}) を使用します。")
         elif len(found_numbers) > 0:
-            st.warning(f"⚠️ {line_num}行目: 座標の数値が2つではありません。スキップされます。: `{line}`")
+            st.warning(f"⚠️ {line_num}行目: 座標の数値が2つ未満です。スキップされます。: `{line}`")
 
     return coordinates
 
@@ -174,11 +172,11 @@ else:
         uploaded_file = st.file_uploader("ファイルを選択", type=['xlsx', 'csv'])
     else:
         coordinate_input_text = st.text_area(
-            '**X, Y** の順で座標を入力してください。\n\n'
+            '**X (Easting), Y (Northing), Z (標高)** の順で座標を入力してください。\n\n'
             '1行に1座標ずつ入力します。数値はスペース、カンマ、タブなどで区切ってください。\n\n'
             '例:\n'
-            '`-36258.580  -147524.100`\n'
-            '`X=-36258.580, Y=-147524.100`',
+            '`-36258.580  -147524.100  35.550`\n'
+            '`X=-36258.580, Y=-147524.100, Z=35.550`',
             height=150
         )
 
@@ -214,6 +212,9 @@ else:
             
             for i, coord in enumerate(coordinates_to_convert):
                 easting, northing = coord['easting'], coord['northing']
+                # Z座標は変換には使用しないが、入力として受け付けるためcoordから取得
+                z_input_val = coord.get('z', 0.0) 
+
                 if easting == 0.0 and northing == 0.0:
                     st.warning(f"⚠️ **点 {i+1}**: 座標値が (0, 0) のためスキップしました。")
                     continue
@@ -241,6 +242,9 @@ else:
                 for res in results_data:
                     st.markdown(f"--- \n### **座標 {res['id']}**")
                     st.write(f"**X:** {res['input']['easting']} | **Y:** {res['input']['northing']}")
+                    # Z座標は入力として受け付けるが、変換結果には表示しない
+                    if 'z' in res['input']:
+                        st.write(f"**Z (入力値):** {res['input']['z']}")
                     if res["result"]:
                         st.write(f"緯度: `{res['result']['lat']:.10f}` | 経度: `{res['result']['lon']:.10f}`")
                         zone_str = f"{res['result']['zone']}"
@@ -275,11 +279,6 @@ else:
                     lon_dms = decimal_to_dms_string(res["result"]["lon"])
                     geoid_in_content += f"{lat_dms} {lon_dms}\n"
             
-            # デバッグ情報
-            st.write(f"geoid_in_content length: {len(geoid_in_content)}")
-            st.write(f"geoid_in_content starts with: {geoid_in_content[:50]}")
-            st.write(f"Button condition (geoid_in_content != \"# 緯度(dms)   経度(dms)\\n\"): {geoid_in_content != "# 緯度(dms)   経度(dms)\n"}")
-
             if geoid_in_content != "# 緯度(dms)   経度(dms)\n": # ヘッダー行以外にデータがある場合のみボタンを表示
                 st.download_button(
                     label="ジオイド高計算用ファイル (.in) をダウンロード",
