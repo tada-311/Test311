@@ -30,7 +30,8 @@ def load_geoid_data(file_path):
     with open(file_path, 'r') as f:
         header = f.readline().split()
         lat_start, lon_start, lat_interval, lon_interval = map(float, header[:4])
-        num_lat, num_lon = map(int, header[4:])
+        num_lat = int(header[4])
+        num_lon = int(header[5])
         data = [float(val) for line in f for val in line.split()]
         geoid_heights = np.array(data).reshape(num_lat, num_lon)
     return geoid_heights, lat_start, lon_start, lat_interval, lon_interval
