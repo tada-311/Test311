@@ -86,54 +86,117 @@ def parse_coordinate_file(uploaded_file):
         else:
             return None, "サポートされていないファイル形式です。Excel (.xlsx) または CSV (.csv) をアップロードしてください。"
 
-        header_locs = {'x': None, 'y': None, 'z': None}
-        found_headers = set()
+        all_coordinates = []
         df_str = df.astype(str)
+
+        # すべてのX, Y, Zヘッダーの位置を検出
+        x_locs = []
+        y_locs = []
+        z_locs = []
 
         for r in range(df.shape[0]):
             for c in range(df.shape[1]):
                 cell_value = df_str.iat[r, c].lower()
                 if not cell_value or cell_value == 'nan': continue
                 
-                if 'x' not in found_headers and re.search(r'x|easting', cell_value):
-                    header_locs['x'] = (r, c); found_headers.add('x')
-                elif 'y' not in found_headers and re.search(r'y|northing', cell_value):
-                    header_locs['y'] = (r, c); found_headers.add('y')
-                elif 'z' not in found_headers and re.search(r'z|height|標高', cell_value):
-                    header_locs['z'] = (r, c); found_headers.add('z')
+                if re.search(r'x|easting', cell_value):
+                    x_locs.append((r, c))
+                elif re.search(r'y|northing', cell_value):
+                    y_locs.append((r, c))
+                elif re.search(r'z|height|標高', cell_value):
+                    z_locs.append((r, c))
 
-        if not all(header_locs.values()):
-            missing = [k.upper() for k, v in header_locs.items() if v is None]
-            return None, f"ヘッダーが見つかりません: {', '.join(missing)} を含むセルが必要です。"
+        used_header_cells = set()
+        
+        # 横方向のヘッダーブロックを探索
+        for r_x, c_x in x_locs:
+            if (r_x, c_x) in used_header_cells: continue
+            
+            # 同じ行でYとZを探す
+            y_match = None
+            for r_y, c_y in y_locs:
+                if r_y == r_x and (r_y, c_y) not in used_header_cells:
+                    y_match = (r_y, c_y)
+                    break
+            
+            z_match = None
+            if y_match:
+                for r_z, c_z in z_locs:
+                    if r_z == r_x and (r_z, c_z) not in used_header_cells:
+                        z_match = (r_z, c_z)
+                        break
+            
+            if y_match and z_match:
+                # 有効な横方向ヘッダーブロックが見つかった
+                header_row = r_x
+                x_col, y_col, z_col = c_x, y_match[1], z_match[1]
+                
+                # データの抽出
+                current_block_coords = []
+                for r_data in range(header_row + 1, df.shape[0]):
+                    try:
+                        easting = float(df.iat[r_data, x_col])
+                        northing = float(df.iat[r_data, y_col])
+                        z = float(df.iat[r_data, z_col])
+                        if not (pd.isna(easting) or pd.isna(northing) or pd.isna(z)):
+                            current_block_coords.append({'easting': easting, 'northing': northing, 'z': z})
+                    except (ValueError, TypeError, IndexError):
+                        # データが数値でない、または範囲外になったらこのブロックの処理を終了
+                        break
+                
+                if current_block_coords:
+                    all_coordinates.extend(current_block_coords)
+                    used_header_cells.add((r_x, c_x))
+                    used_header_cells.add(y_match)
+                    used_header_cells.add(z_match)
 
-        rows, cols = [loc[0] for loc in header_locs.values()], [loc[1] for loc in header_locs.values()]
-        coordinates = []
+        # 縦方向のヘッダーブロックを探索
+        for r_x, c_x in x_locs:
+            if (r_x, c_x) in used_header_cells: continue # 既に横方向で使われていたらスキップ
+            
+            # 同じ列でYとZを探す
+            y_match = None
+            for r_y, c_y in y_locs:
+                if c_y == c_x and (r_y, c_y) not in used_header_cells:
+                    y_match = (r_y, c_y)
+                    break
+            
+            z_match = None
+            if y_match:
+                for r_z, c_z in z_locs:
+                    if c_z == c_x and (r_z, c_z) not in used_header_cells:
+                        z_match = (r_z, c_z)
+                        break
+            
+            if y_match and z_match:
+                # 有効な縦方向ヘッダーブロックが見つかった
+                header_col = c_x
+                x_row, y_row, z_row = r_x, y_match[0], z_match[0]
+                
+                # データの抽出
+                current_block_coords = []
+                for c_data in range(header_col + 1, df.shape[1]):
+                    try:
+                        easting = float(df.iat[x_row, c_data])
+                        northing = float(df.iat[y_row, c_data])
+                        z = float(df.iat[z_row, c_data])
+                        if not (pd.isna(easting) or pd.isna(northing) or pd.isna(z)):
+                            current_block_coords.append({'easting': easting, 'northing': northing, 'z': z})
+                    except (ValueError, TypeError, IndexError):
+                        # データが数値でない、または範囲外になったらこのブロックの処理を終了
+                        break
+                
+                if current_block_coords:
+                    all_coordinates.extend(current_block_coords)
+                    used_header_cells.add((r_x, c_x))
+                    used_header_cells.add(y_match)
+                    used_header_cells.add(z_match)
 
-        if len(set(rows)) == 1: # 横方向レイアウト
-            header_row = rows[0]
-            x_col, y_col, z_col = header_locs['x'][1], header_locs['y'][1], header_locs['z'][1]
-            data_df = df.iloc[header_row + 1:]
-            for _, row_data in data_df.iterrows():
-                try:
-                    coords = {'easting': float(row_data[x_col]), 'northing': float(row_data[y_col]), 'z': float(row_data[z_col])}
-                    if not (pd.isna(coords['easting']) or pd.isna(coords['northing'])):
-                        coordinates.append(coords)
-                except (ValueError, TypeError, IndexError): continue
-            return coordinates, None
+        if not all_coordinates:
+            return None, "ファイルから有効な座標データが見つかりませんでした。X, Y, Z のヘッダーを同じ行または同じ列に揃えてください。"
+        
+        return all_coordinates, None
 
-        elif len(set(cols)) == 1: # 縦方向レイアウト
-            header_col = cols[0]
-            x_row, y_row, z_row = header_locs['x'][0], header_locs['y'][0], header_locs['z'][0]
-            data_df = df.iloc[:, header_col + 1:]
-            for col_idx in data_df.columns:
-                try:
-                    coords = {'easting': float(df.iat[x_row, col_idx]), 'northing': float(df.iat[y_row, col_idx]), 'z': float(df.iat[z_row, col_idx])}
-                    if not (pd.isna(coords['easting']) or pd.isna(coords['northing'])):
-                        coordinates.append(coords)
-                except (ValueError, TypeError, IndexError): continue
-            return coordinates, None
-        else:
-            return None, "ヘッダーのレイアウトを認識できません。X, Y, Z のヘッダーを同じ行または同じ列に揃えてください。"
     except Exception as e:
         return None, f"ファイルの処理中に予期せぬエラーが発生しました: {e}"
 
