@@ -14,26 +14,10 @@ japan_bounds = {
     "lon_min": 122.0,
     "lon_max": 154.0
 }
-# ジオイドモデルのファイルパス
-GEOID_DATA_PATH = os.path.join(os.path.dirname(__file__), "gsigeo2011_ver2_2", "gsigeo2011_ver2_2.asc")
 
 # --- データ読み込み・計算関数 ---
 
-@st.cache_data
-def load_geoid_data(file_path):
-    """ジオイドデータファイルを読み込む"""
-    if not os.path.exists(file_path):
-        st.error(f"ジオイドデータファイルが見つかりません: {file_path}")
-        return None, None, None, None, None
 
-    with open(file_path, 'r') as f:
-        header = f.readline().split()
-        lat_start, lon_start, lat_interval, lon_interval = map(float, header[:4])
-        num_lat = int(header[4])
-        num_lon = int(header[5])
-        data = [float(val) for line in f for val in line.split()]
-        geoid_heights = np.array(data).reshape(num_lat, num_lon)
-    return geoid_heights, lat_start, lon_start, lat_interval, lon_interval
 
 # --- 新しいファイル解析関数 ---
 def parse_coordinate_file(uploaded_file):
