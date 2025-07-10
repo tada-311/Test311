@@ -35,6 +35,7 @@ def _deg_to_dms_string(degrees):
     s = (degrees - d - m / 60) * 3600
     return f"{d:02d}{m:02d}{s:07.4f}" # 例: 353900.0000
 
+
 @st.cache_data
 def get_geoid_height(lat, lon):
     """緯度経度からジオイド高を計算（geoidcalc_win64.exeを使用）"""
@@ -68,26 +69,6 @@ def get_geoid_height(lat, lon):
     except Exception as e:
         st.error(f"ジオイド高の取得中に予期せぬエラーが発生しました: {e}")
         return None
-
-
-def auto_detect_zone(easting, northing):
-    """座標値から最も可能性の高い系番号を自動判別する"""
-    candidates = []
-    for z_ in range(1, 20):
-        try:
-            transformer = Transformer.from_crs(f"EPSG:{6660 + z_}", "EPSG:4326", always_xy=True)
-            lon, lat = transformer.transform(northing, easting)
-            if japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]:
-                candidates.append({"zone": z_, "epsg": 6660 + z_, "lat": lat, "lon": lon})
-        except Exception:
-            continue
-    if not candidates: return None
-    reference_point = (33.5, 131.0)
-    for c in candidates:
-        c["distance"] = geodesic((c["lat"], c["lon"]), reference_point).meters
-    best = min(candidates, key=lambda x: x["distance"])
-    best["auto_detected"] = True
-    return best
 
 # --- 新しいファイル解析関数 ---
 def parse_coordinate_file(uploaded_file):
