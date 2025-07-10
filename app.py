@@ -275,6 +275,11 @@ else:
                     lon_dms = decimal_to_dms_string(res["result"]["lon"])
                     geoid_in_content += f"{lat_dms} {lon_dms}\n"
             
+            # デバッグ情報
+            st.write(f"geoid_in_content length: {len(geoid_in_content)}")
+            st.write(f"geoid_in_content starts with: {geoid_in_content[:50]}")
+            st.write(f"Button condition (geoid_in_content != \"# 緯度(dms)   経度(dms)\\n\"): {geoid_in_content != "# 緯度(dms)   経度(dms)\n"}")
+
             if geoid_in_content != "# 緯度(dms)   経度(dms)\n": # ヘッダー行以外にデータがある場合のみボタンを表示
                 st.download_button(
                     label="ジオイド高計算用ファイル (.in) をダウンロード",
