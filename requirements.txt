@@ -2,3 +2,5 @@ streamlit
 geopy
 pyproj
 numpy
+pandas
+openpyxl
