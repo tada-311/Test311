@@ -6,6 +6,7 @@ import pandas as pd
 import os
 import re
 import io
+import subprocess
 
 # --- 定数 ---
 # 日本の緯度経度の範囲
@@ -15,39 +16,59 @@ japan_bounds = {
     "lon_min": 122.0,
     "lon_max": 154.0
 }
-# ジオイドモデルのファイルパス
-GEOID_DATA_PATH = os.path.join(os.path.dirname(__file__), "gsigeo2011_ver2_2", "gsigeo2011_ver2_2.asc")
+# JPGEO2024ジオイドモデルのファイルパスと実行ファイルパス
+JPGEO_DIR = os.path.join(os.path.dirname(__file__), "JPGEO2024_isg")
+GEOID_EXE_PATH = os.path.join(JPGEO_DIR, "geoidcalc_win64.exe")
+JPGEO_DATA_FILE = os.path.join(JPGEO_DIR, "JPGEO2024.isg")
+JPGEO_INPUT_FILE = os.path.join(JPGEO_DIR, "input.txt")
+JPGEO_OUTPUT_FILE = os.path.join(JPGEO_DIR, "output.txt")
 
 # --- データ読み込み・計算関数 ---
 
+def _deg_to_dms_string(degrees):
+    """度を度分秒形式の文字列に変換する"""
+    if degrees is None: return ""
+    is_negative = degrees < 0
+    degrees = abs(degrees)
+    d = int(degrees)
+    m = int((degrees - d) * 60)
+    s = (degrees - d - m / 60) * 3600
+    return f"{d:02d}{m:02d}{s:07.4f}" # 例: 353900.0000
+
 @st.cache_data
-def load_geoid_data(file_path):
-    """ジオイドデータファイルを読み込む"""
-    if not os.path.exists(file_path):
-        st.error(f"ジオイドデータファイルが見つかりません: {file_path}")
-        return None, None, None, None, None
+def get_geoid_height(lat, lon):
+    """緯度経度からジオイド高を計算（geoidcalc_win64.exeを使用）"""
+    try:
+        # 度分秒形式に変換
+        lat_dms = _deg_to_dms_string(lat)
+        lon_dms = _deg_to_dms_string(lon)
 
-    with open(file_path, 'r') as f:
-        header = f.readline().split()
-        lat_start, lon_start, lat_interval, lon_interval = map(float, header[:4])
-        num_lat = int(header[4])
-        num_lon = int(header[5])
-        data = [float(val) for line in f for val in line.split()]
-        geoid_heights = np.array(data).reshape(num_lat, num_lon)
-    return geoid_heights, lat_start, lon_start, lat_interval, lon_interval
+        # input.txtに書き込み
+        with open(JPGEO_INPUT_FILE, 'w') as f:
+            f.write("Unit:DMS\n")
+            f.write(f"{lat_dms} {lon_dms}\n")
 
-def get_geoid_height(lat, lon, geoid_heights, lat_start, lon_start, lat_interval, lon_interval):
-    """緯度経度からジオイド高を計算（バイリニア補間）"""
-    if geoid_heights is None: return None
-    row = (lat - lat_start) / lat_interval
-    col = (lon - lon_start) / lon_interval
-    row_int, col_int = int(row), int(col)
-    if not (0 <= row_int < geoid_heights.shape[0] - 1 and 0 <= col_int < geoid_heights.shape[1] - 1):
+        # geoidcalc_win64.exeを実行
+        # cwdをJPGEO_DIRに設定することで、exeがinput.txtと.isgファイルを正しく見つけられるようにする
+        result = subprocess.run([GEOID_EXE_PATH], cwd=JPGEO_DIR, capture_output=True, text=True, check=True)
+
+        # output.txtからジオイド高を読み取る
+        with open(JPGEO_OUTPUT_FILE, 'r') as f:
+            lines = f.readlines()
+            # 最後の行からジオイド高を抽出
+            geoid_h = float(lines[-1].split()[-1])
+            return geoid_h
+
+    except FileNotFoundError:
+        st.error(f"ジオイド計算プログラムが見つかりません: {GEOID_EXE_PATH}")
         return None
-    h11, h12, h21, h22 = geoid_heights[row_int, col_int], geoid_heights[row_int, col_int + 1], geoid_heights[row_int + 1, col_int], geoid_heights[row_int + 1, col_int + 1]
-    dx, dy = col - col_int, row - row_int
-    geoid_h = (h11 * (1 - dx) * (1 - dy) + h12 * dx * (1 - dy) + h21 * (1 - dx) * dy + h22 * dx * dy)
-    return geoid_h if geoid_h != 999.0000 else None
+    except subprocess.CalledProcessError as e:
+        st.error(f"ジオイド計算プログラムの実行中にエラーが発生しました: {e.stderr}")
+        return None
+    except Exception as e:
+        st.error(f"ジオイド高の取得中に予期せぬエラーが発生しました: {e}")
+        return None
+
 
 def auto_detect_zone(easting, northing):
     """座標値から最も可能性の高い系番号を自動判別する"""
@@ -234,9 +255,10 @@ if not st.session_state["password_correct"]:
         else:
             st.error("パスワードが間違っています")
 else:
-    geoid_heights, lat_start, lon_start, lat_interval, lon_interval = load_geoid_data(GEOID_DATA_PATH)
-    if geoid_heights is None:
-        st.stop()
+    # ジオイドデータの読み込みはget_geoid_height関数内で処理されるため不要
+    # geoid_heights, lat_start, lon_start, lat_interval, lon_interval = load_geoid_data(GEOID_DATA_PATH)
+    # if geoid_heights is None:
+    #     st.stop()
 
     st.markdown("---")
     st.subheader("座標入力")
@@ -313,7 +335,7 @@ else:
                 
                 ellipsoidal_height, geoid_h = None, None
                 if result_info:
-                    geoid_h = get_geoid_height(result_info['lat'], result_info['lon'], geoid_heights, lat_start, lon_start, lat_interval, lon_interval)
+                    geoid_h = get_geoid_height(result_info['lat'], result_info['lon'])
                     if geoid_h is not None:
                         ellipsoidal_height = z + geoid_h
 
