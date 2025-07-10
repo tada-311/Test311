@@ -330,9 +330,9 @@ else:
                     with col2:
                         st.write("**変換結果 (WGS84)**")
                         if res["result"]:
-                            st.write(f"緯度: `{res['result']['lat']:.8f}` | 経度: `{res['result']['lon']:.8f}`")
+                            st.write(f"緯度: `{res['result']['lat']:.10f}` | 経度: `{res['result']['lon']:.10f}`")
                             if res["ellipsoidal_height"] is not None:
-                                st.write(f"楕円体高: `{res['ellipsoidal_height']:.4f} m` (ジオイド高: `{res['geoid_height']:.4f} m`)")
+                                st.write(f"楕円体高: `{res['ellipsoidal_height']:.10f} m` (ジオイド高: `{res['geoid_height']:.10f} m`)")
                             else:
                                 st.warning("ジオイド高取得不可")
                             zone_str = f"第{res['result']['zone']}系"
@@ -345,10 +345,10 @@ else:
                 summary_data = []
                 for res in results_data:
                     if res["result"]:
-                        h_str = f"{res['ellipsoidal_height']:.3f}" if res['ellipsoidal_height'] is not None else "N/A"
+                        h_str = f"{res['ellipsoidal_height']:.10f}" if res['ellipsoidal_height'] is not None else "N/A"
                         zone_str = f"{res['result']['zone']}"
                         if res['result'].get("auto_detected"): zone_str += "*"
-                        summary_data.append({"点": res["id"], "緯度": f"{res['result']['lat']:.7f}", "経度": f"{res['result']['lon']:.7f}", "楕円体高(m)": h_str, "系": zone_str})
+                        summary_data.append({"点": res["id"], "緯度": f"{res['result']['lat']:.10f}", "経度": f"{res['result']['lon']:.10f}", "楕円体高(m)": h_str, "系": zone_str})
                     else:
                         summary_data.append({"点": res["id"], "緯度": "変換失敗", "経度": "", "楕円体高(m)": "", "系": ""})
                 st.dataframe(summary_data, use_container_width=True)
