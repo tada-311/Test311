@@ -4,3 +4,4 @@ pyproj
 numpy
 pandas
 openpyxl
+pyisg
