@@ -127,21 +127,33 @@ def parse_coordinate_file(uploaded_file):
 
 def parse_coordinate_text(input_string):
     coordinates = []
-    # 1行ずつ処理
-    for line_num, line in enumerate(input_string.splitlines(), 1):
-        # 行から数値を抽出
-        found_numbers = re.findall(r'[-+]?\d*\.?\d+', line)
-        
-        if len(found_numbers) >= 2:
-            # X, Y の順で解釈 (Easting, Northing)
-            easting = float(found_numbers[0])
-            northing = float(found_numbers[1])
-            z = float(found_numbers[2]) if len(found_numbers) >= 3 else 0.0 # Zがあれば取得、なければ0.0
-            coordinates.append({'easting': easting, 'northing': northing, 'z': z})
-            if len(found_numbers) > 3:
-                st.warning(f"⚠️ {line_num}行目: 3つより多くの数値が見つかりました。最初の3つ ({easting}, {northing}, {z}) を使用します。")
-        elif len(found_numbers) > 0:
-            st.warning(f"⚠️ {line_num}行目: 座標の数値が2つ未満です。スキップされます。: `{line}`")
+    # 入力文字列全体からすべての数値を抽出
+    all_numbers_str = re.findall(r'[-+]?\d*\.?\d+', input_string)
+    all_numbers = [float(n) for n in all_numbers_str]
+
+    i = 0
+    while i < len(all_numbers):
+        if i + 1 < len(all_numbers): # X, Y が少なくともある場合
+            easting = all_numbers[i]
+            northing = all_numbers[i+1]
+            z = 0.0 # デフォルトZ値
+
+            if i + 2 < len(all_numbers): # Z もある場合
+                # 次の数値がZであると仮定
+                z = all_numbers[i+2]
+                coordinates.append({'easting': easting, 'northing': northing, 'z': z})
+                i += 3 # 3つ進む
+            else:
+                # Zがない場合 (X, Y のみ)
+                coordinates.append({'easting': easting, 'northing': northing, 'z': z})
+                i += 2 # 2つ進む
+        else:
+            # 数値がXのみでYがない場合など、不完全な座標
+            st.warning(f"⚠️ 不完全な座標データが見つかりました。スキップされます。残りの数値: {all_numbers[i:]}")
+            break # 残りの数値は処理できないのでループを抜ける
+
+    if not coordinates and all_numbers:
+        st.warning("⚠️ 入力された数値から有効な座標ペアを抽出できませんでした。X, Y, (Z) の形式で入力されているか確認してください。")
 
     return coordinates
 
@@ -168,7 +180,8 @@ else:
     uploaded_file = None
 
     if input_method == "ファイルアップロード":
-        st.info("Excel (.xlsx) または CSV (.csv) ファイルをアップロードしてください。")
+        st.info("Excel (.xlsx) または CSV (.csv) ファイルをアップロードしてください。"
+)
         uploaded_file = st.file_uploader("ファイルを選択", type=['xlsx', 'csv'])
     else:
         coordinate_input_text = st.text_area(
@@ -269,7 +282,8 @@ else:
                     else:
                         summary_data.append({"点": res["id"], "緯度": "変換失敗", "経度": "", "系": ""})
                 st.dataframe(summary_data, use_container_width=True)
-                st.caption("* が付いている系番号は自動判別されたものです。")
+                st.caption("* が付いている系番号は自動判別されたものです。"
+)
 
             # ジオイド高計算用ファイル出力ボタン
             geoid_in_content = "# 緯度(dms)   経度(dms)\n"
