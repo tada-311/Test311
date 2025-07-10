@@ -55,7 +55,7 @@ def auto_detect_zone(easting, northing):
     for z_ in range(1, 20):
         try:
             transformer = Transformer.from_crs(f"EPSG:{6660 + z_}", "EPSG:4326", always_xy=True)
-            lon, lat = transformer.transform(easting, northing)
+            lon, lat = transformer.transform(northing, easting)
             if japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]:
                 candidates.append({"zone": z_, "epsg": 6660 + z_, "lat": lat, "lon": lon})
         except Exception:
@@ -302,7 +302,7 @@ else:
                 else:
                     try:
                         transformer = Transformer.from_crs(f"EPSG:{6660 + zone_input}", "EPSG:4326", always_xy=True)
-                        lon, lat = transformer.transform(easting, northing)
+                        lon, lat = transformer.transform(northing, easting)
                         if not (japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]):
                             result_info = auto_detect_zone(easting, northing)
                             if result_info: result_info["manual_fail"] = True
