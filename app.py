@@ -61,7 +61,7 @@ def auto_detect_zone(easting, northing):
         except Exception:
             continue
     if not candidates: return None
-    reference_point = (33.23, 131.61)
+    reference_point = (33.5, 131.0)
     for c in candidates:
         c["distance"] = geodesic((c["lat"], c["lon"]), reference_point).meters
     best = min(candidates, key=lambda x: x["distance"])
