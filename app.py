@@ -352,4 +352,4 @@ else:
                     else:
                         summary_data.append({"点": res["id"], "緯度": "変換失敗", "経度": "", "楕円体高(m)": "", "系": ""})
                 st.dataframe(summary_data, use_container_width=True)
-                st.caption("* が付いている系番号は自動判別されたものです。")
+                st.caption("アスタリスク (*) が付いている系番号は自動判別されたものです。")
