@@ -6,6 +6,8 @@ import re
 import io
 import pandas as pd # pandasを再インポート
 
+# --- バージョン情報: 2024-07-10_v2.0 - 座標順序修正と柔軟な入力対応 ---
+
 # --- 定数 ---
 japan_bounds = {
     "lat_min": 20.0,
@@ -133,19 +135,18 @@ def parse_coordinate_text(input_string):
 
     i = 0
     while i < len(all_numbers):
-        if i + 1 < len(all_numbers): # X, Y が少なくともある場合
-            easting = all_numbers[i]
-            northing = all_numbers[i+1]
+        if i + 1 < len(all_numbers): # X (Northing), Y (Easting) が少なくともある場合
+            northing_val = all_numbers[i]  # ユーザーのXはNorthing
+            easting_val = all_numbers[i+1] # ユーザーのYはEasting
             z = 0.0 # デフォルトZ値
 
             if i + 2 < len(all_numbers): # Z もある場合
-                # 次の数値がZであると仮定
                 z = all_numbers[i+2]
-                coordinates.append({'easting': easting, 'northing': northing, 'z': z})
+                coordinates.append({'easting': easting_val, 'northing': northing_val, 'z': z})
                 i += 3 # 3つ進む
             else:
                 # Zがない場合 (X, Y のみ)
-                coordinates.append({'easting': easting, 'northing': northing, 'z': z})
+                coordinates.append({'easting': easting_val, 'northing': northing_val, 'z': z})
                 i += 2 # 2つ進む
         else:
             # 数値がXのみでYがない場合など、不完全な座標
@@ -153,7 +154,7 @@ def parse_coordinate_text(input_string):
             break # 残りの数値は処理できないのでループを抜ける
 
     if not coordinates and all_numbers:
-        st.warning("⚠️ 入力された数値から有効な座標ペアを抽出できませんでした。X, Y, (Z) の形式で入力されているか確認してください。")
+        st.warning("⚠️ 入力された数値から有効な座標ペアを抽出できませんでした。X (Northing), Y (Easting), (Z) の形式で入力されているか確認してください。")
 
     return coordinates
 
@@ -185,7 +186,7 @@ else:
         uploaded_file = st.file_uploader("ファイルを選択", type=['xlsx', 'csv'])
     else:
         coordinate_input_text = st.text_area(
-            '**X (Easting), Y (Northing), Z (標高)** の順で座標を入力してください。\n\n'
+            '**X (Northing), Y (Easting), Z (標高)** の順で座標を入力してください。\n\n'
             '1行に1座標ずつ入力します。数値はスペース、カンマ、タブなどで区切ってください。\n\n'
             '例:\n'
             '`-36258.580  -147524.100  35.550`\n'
