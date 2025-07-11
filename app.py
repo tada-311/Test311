@@ -79,7 +79,8 @@ def clear_download_state():
     """ダウンロード後にセッション情報をクリアするコールバック関数"""
     st.session_state['z_values_for_geoid'] = None
     st.session_state['original_filename'] = None
-    st.session_state['conversion_results_for_geoid'] = None # 追加
+    st.session_state['conversion_results_for_geoid'] = None
+    st.session_state['uploaded_file_data'] = None # 追加
 
 # --- 座標変換ヘルパー ---
 def auto_detect_zone(easting, northing):
@@ -333,8 +334,15 @@ def main_app():
 
     if input_method == "ファイルアップロード":
         st.info("Excel (.xlsx) または CSV (.csv) ファイルをアップロードしてください。")
-        uploaded_file = st.file_uploader("ファイルを選択", type=['xlsx', 'csv'])
-    else:
+        uploaded_file = st.file_uploader("ファイルを選択", type=['xlsx', 'csv'], key="file_uploader_key")
+        
+        # アップロードされたファイルをセッション状態に保存
+        if uploaded_file is not None:
+            st.session_state['uploaded_file_data'] = uploaded_file
+        
+        # セッション状態にファイルがある場合はそれを使用
+        if 'uploaded_file_data' in st.session_state and st.session_state['uploaded_file_data'] is not None:
+            uploaded_file = st.session_state['uploaded_file_data']
         coordinate_input_text = st.text_area(
             '**X, Y** の順で座標を入力してください。\n\n'
             '1行に1座標ずつ入力します。数値はスペース、カンマ、タブなどで区切ってください。\n\n'
@@ -416,7 +424,7 @@ def main_app():
                         if res['result'].get("auto_detected"):
                             zone_str += " (自動判別)"
                         st.write(f"系番号: `{zone_str}`")
-                        st.write(f"元のZ座標: `{res['original_z']:.3f}`") # 元のZ座標を表示
+                        st.write(f"Z座標（標高）: `{res['original_z']:.3f}`") # 元のZ座標を表示
                     else:
                         st.error("座標変換失敗")
             else:
@@ -431,7 +439,7 @@ def main_app():
                             "緯度": f"{res['result']['lat']:.10f}",
                             "経度": f"{res['result']['lon']:.10f}",
                             "系": zone_str,
-                            "元のZ": f"{res['original_z']:.3f}" # 要約表示にも元のZ座標を追加
+                            "Z座標（標高）": f"{res['original_z']:.3f}" # 要約表示にも元のZ座標を追加
                         })
                     else:
                         summary_data.append({"点": res["id"], "緯度": "変換失敗", "経度": "", "系": "", "元のZ": ""})
