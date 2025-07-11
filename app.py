@@ -409,13 +409,13 @@ def main():
                 st.error("パスワードが間違っています")
     else:
         st.sidebar.title("ナビゲーション")
-        page = st.sidebar.radio("ページを選択", ["座標変換", "ジオイド高結果Excel出力"])
+        page = st.sidebar.radio("ページを選択", ["座標変換", "変換結果出力"])
 
         if page == "座標変換":
             st.title("座標変換ツール (JGD2011平面直角座標系 → WGS84緯度経度)")
 
             st.header("入力方法の選択")
-            input_method = st.radio("座標の入力方法を選択してください:", ("ファイルアップロード", "テキスト入力"))
+            input_method = st.radio("座標の入力方法を選択してください:", ("ファイルアップロード", "テキスト入力"), horizontal=True)
 
             coordinates_to_convert = []
             uploaded_file = None
@@ -437,7 +437,7 @@ def main():
                 ["自動検出"] + [f"{i}系" for i in range(1, 20)]
             )
 
-            display_mode = st.radio("表示モード:", ("要約表示", "詳細表示"))
+            display_mode = st.radio("表示モード:", ("要約表示", "詳細表示"), horizontal=True)
 
             if st.button('変換実行', type="primary"):
                 # 変換実行時にファイル名をリセット
