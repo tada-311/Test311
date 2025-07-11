@@ -1,11 +1,11 @@
-
 import streamlit as st
 from pyproj import Transformer
 from geopy.distance import geodesic
 import os
 import re
 import io
-import pandas as pd # pandasを再インポート
+import pandas as pd
+import numpy as np
 
 # --- バージョン情報: 2024-07-10_v3.0 - 座標順序修正とジオイド高Excel出力機能追加 ---
 
