@@ -112,7 +112,75 @@ def auto_detect_zone(easting, northing):
 
 # --- ファイル解析関数 ---
 def _extract_float_from_string(s):
-    """Extracts the first floating-point number from a string, ignoring units."""
+    """Extracts the first floating-point number from a string, ignoring units and other non-numeric characters."""
+    if not isinstance(s, str):
+        return None
+    # This regex finds the first float-like number in the string
+    match = re.search(r'[-+]?\d*\.?\d+', s)
+    if match:
+        try:
+            return float(match.group(0))
+        except (ValueError, TypeError):
+            return None
+    return None
+
+def parse_coordinate_file(uploaded_file):
+    """
+    アップロードされたファイル（Excel/CSV）を解析し、座標データとZ値のリストを返す統一関数。
+    セル内の文字列からX,Y,Zのラベルと数値を柔軟に抽出し、座標を認識する。
+    戻り値: (all_coords, all_z_values, error_message)
+    """
+    if uploaded_file is None:
+        return None, None, "ファイルがアップロードされていません。"
+    try:
+        ext = os.path.splitext(uploaded_file.name)[1].lower()
+        if ext == '.csv':
+            content = uploaded_file.getvalue()
+            try:
+                df = pd.read_csv(io.StringIO(content.decode('utf-8')), header=None, dtype=str)
+            except UnicodeDecodeError:
+                df = pd.read_csv(io.StringIO(content.decode('shift-jis')), header=None, dtype=str)
+        elif ext in ['.xlsx', '.xls']:
+            df = pd.read_excel(uploaded_file, header=None, engine='openpyxl', dtype=str)
+        else:
+            return None, None, "サポートされていないファイル形式です。"
+
+        def _extract_float_from_string(s):
+    """Extracts the first floating-point number from a string, ignoring units and other non-numeric characters."""
+    if not isinstance(s, str):
+        return None
+    # This regex finds the first float-like number in the string
+    match = re.search(r'[-+]?\d*\.?\d+', s)
+    if match:
+        try:
+            return float(match.group(0))
+        except (ValueError, TypeError):
+            return None
+    return None
+
+def parse_coordinate_file(uploaded_file):
+    """
+    アップロードされたファイル（Excel/CSV）を解析し、座標データとZ値のリストを返す統一関数。
+    セル内の文字列からX,Y,Zのラベルと数値を柔軟に抽出し、座標を認識する。
+    戻り値: (all_coords, all_z_values, error_message)
+    """
+    if uploaded_file is None:
+        return None, None, "ファイルがアップロードされていません。"
+    try:
+        ext = os.path.splitext(uploaded_file.name)[1].lower()
+        if ext == '.csv':
+            content = uploaded_file.getvalue()
+            try:
+                df = pd.read_csv(io.StringIO(content.decode('utf-8')), header=None, dtype=str)
+            except UnicodeDecodeError:
+                df = pd.read_csv(io.StringIO(content.decode('shift-jis')), header=None, dtype=str)
+        elif ext in ['.xlsx', '.xls']:
+            df = pd.read_excel(uploaded_file, header=None, engine='openpyxl', dtype=str)
+        else:
+            return None, None, "サポートされていないファイル形式です。"
+
+        def _extract_float_from_string(s):
+    """Extracts the first floating-point number from a string, ignoring units and other non-numeric characters."""
     if not isinstance(s, str):
         return None
     # This regex finds the first float-like number in the string
@@ -152,77 +220,77 @@ def parse_coordinate_file(uploaded_file):
         # Scan all cells to find X, Y, Z values
         for r in range(df.shape[0]):
             for c in range(df.shape[1]):
-                cell_content = str(df.iat[r, c]).strip() # Keep original case for regex matching
+                cell_content = str(df.iat[r, c]).strip()
+                if not cell_content or cell_content.lower() == 'nan':
+                    continue
 
-                # Regex to capture the number after X, Y, Z, or 標高/height, ignoring units
-                # Group 1 captures the number part
-                x_match = re.search(r'[Xx]\s*=?\s*([-+]?\d*\.?\d+)', cell_content)
-                y_match = re.search(r'[Yy]\s*=?\s*([-+]?\d*\.?\d+)', cell_content)
-                z_match = re.search(r'(?:[Zz]|標高|height)\s*=?\s*([-+]?\d*\.?\d+)', cell_content)
+                # Extract the first float from the cell content
+                num_val = _extract_float_from_string(cell_content)
 
-                if x_match:
-                    try:
-                        val = float(x_match.group(1))
-                        all_x_data.append({'value': val, 'row': r, 'col': c})
-                    except ValueError: pass
-                elif y_match:
-                    try:
-                        val = float(y_match.group(1))
-                        all_y_data.append({'value': val, 'row': r, 'col': c})
-                    except ValueError: pass
-                elif z_match:
-                    try:
-                        val = float(z_match.group(1))
-                        all_z_data.append({'value': val, 'row': r, 'col': c})
-                    except ValueError: pass
-
-        # Now, try to group these into points.
-        # Heuristic: Look for X, Y, Z that are close to each other, prioritizing column-wise grouping
-        # (e.g., X in A1, Y in A2, Z in A3 forms one point)
+                if num_val is not None:
+                    # Check if the cell content contains X, Y, or Z labels
+                    if re.search(r'[Xx]', cell_content, re.IGNORECASE):
+                        all_x_data.append({'value': num_val, 'row': r, 'col': c})
+                    elif re.search(r'[Yy]', cell_content, re.IGNORECASE):
+                        all_y_data.append({'value': num_val, 'row': r, 'col': c})
+                    elif re.search(r'(?:[Zz]|標高|height)', cell_content, re.IGNORECASE):
+                        all_z_data.append({'value': num_val, 'row': r, 'col': c})
 
         final_coords = []
         used_y_indices = set()
         used_z_indices = set()
 
         # Sort X, Y, Z data to process in a consistent order (e.g., top-left to bottom-right)
-        all_x_data.sort(key=lambda item: (item['col'], item['row']))
-        all_y_data.sort(key=lambda item: (item['col'], item['row']))
-        all_z_data.sort(key=lambda item: (item['col'], item['row']))
+        all_x_data.sort(key=lambda item: (item['row'], item['col']))
+        all_y_data.sort(key=lambda item: (item['row'], item['col']))
+        all_z_data.sort(key=lambda item: (item['row'], item['col']))
 
         for x_item in all_x_data:
             easting = x_item['value']
             x_row, x_col = x_item['row'], x_item['col']
 
             found_y = None
-            # Look for Y in the same column, or adjacent column, and close rows
+            found_z = None
+
+            # Try to find Y and Z in a vertical block (X, Y, Z in consecutive rows of the same column)
+            # Search for Y directly below X
             for i, y_item in enumerate(all_y_data):
                 if i in used_y_indices: continue
-                if y_item['col'] == x_col and (y_item['row'] == x_row + 1 or y_item['row'] == x_row - 1): # Same col, adjacent row
+                if y_item['col'] == x_col and y_item['row'] == x_row + 1: 
                     found_y = y_item
                     used_y_indices.add(i)
                     break
-                elif y_item['row'] == x_row and (y_item['col'] == x_col + 1 or y_item['col'] == x_col - 1): # Same row, adjacent col
-                    found_y = y_item
-                    used_y_indices.add(i)
-                    break
-
+            
+            # If Y found vertically, search for Z directly below Y
             if found_y:
-                northing = found_y['value']
-                y_row, y_col = found_y['row'], found_y['col']
-
-                found_z = None
-                # Look for Z in the same column, or adjacent column, and close rows
                 for i, z_item in enumerate(all_z_data):
                     if i in used_z_indices: continue
-                    if z_item['col'] == x_col and (z_item['row'] == x_row + 2 or z_item['row'] == x_row + 1 or z_item['row'] == x_row - 1 or z_item['row'] == x_row - 2): # Same col, close row
+                    if z_item['col'] == x_col and z_item['row'] == x_row + 2: 
                         found_z = z_item
                         used_z_indices.add(i)
                         break
-                    elif z_item['row'] == x_row and (z_item['col'] == x_col + 2 or z_item['col'] == x_col + 1 or z_item['col'] == x_col - 1 or z_item['col'] == x_col - 2): # Same row, close col
-                        found_z = z_item
-                        used_z_indices.add(i)
+
+            # If not found vertically, try horizontally (X, Y, Z in consecutive columns of the same row)
+            if not found_y: # Only try horizontal if vertical wasn't found
+                # Search for Y directly to the right of X
+                for i, y_item in enumerate(all_y_data):
+                    if i in used_y_indices: continue
+                    if y_item['row'] == x_row and y_item['col'] == x_col + 1: 
+                        found_y = y_item
+                        used_y_indices.add(i)
                         break
                 
+                # If Y found horizontally, search for Z directly to the right of Y
+                if found_y:
+                    for i, z_item in enumerate(all_z_data):
+                        if i in used_z_indices: continue
+                        if z_item['row'] == x_row and z_item['col'] == x_col + 2: 
+                            found_z = z_item
+                            used_z_indices.add(i)
+                            break
+
+            if found_y: # Y is mandatory for a coordinate point
+                northing = found_y['value']
                 z_val = found_z['value'] if found_z else 0.0
 
                 final_coords.append({
@@ -233,6 +301,11 @@ def parse_coordinate_file(uploaded_file):
 
         if not final_coords:
             return None, None, "有効な座標データが見つかりませんでした。"
+
+        all_z_values = [c['z'] for c in final_coords]
+        return final_coords, all_z_values, None
+    except Exception as e:
+        return None, None, f"ファイル解析エラー: {e}"
 
         all_z_values = [c['z'] for c in final_coords]
         return final_coords, all_z_values, None
