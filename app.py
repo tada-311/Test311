@@ -218,16 +218,93 @@ def parse_coordinate_text(input_string):
 
     return coordinates
 
+# --- Z座標抽出関数 ---
+def extract_z_from_file(uploaded_file):
+    if not uploaded_file:
+        return None, "ファイルが選択されていません。"
+    try:
+        ext = os.path.splitext(uploaded_file.name)[1].lower()
+        if ext == '.csv':
+            content = uploaded_file.getvalue()
+            try:
+                df = pd.read_csv(io.StringIO(content.decode('utf-8')), header=None, dtype=str)
+            except UnicodeDecodeError:
+                df = pd.read_csv(io.StringIO(content.decode('shift-jis')), header=None, dtype=str)
+        elif ext in ['.xlsx', '.xls']:
+            df = pd.read_excel(uploaded_file, header=None, engine='openpyxl', dtype=str)
+        else:
+            return None, "サポートされていないファイル形式です。"
+
+        z_loc = None
+        header_row = -1
+
+        # Zヘッダーの場所を探す
+        for r in range(df.shape[0]):
+            for c in range(df.shape[1]):
+                val = str(df.iat[r, c]).lower()
+                if re.search(r'z|標高|height', val):
+                    z_loc = (r, c)
+                    header_row = r
+                    break
+            if z_loc:
+                break
+
+        if not z_loc:
+            return None, "Z座標、標高、またはheightというヘッダーが見つかりませんでした。"
+
+        z_col = z_loc[1]
+        z_values = []
+        for r_data in range(header_row + 1, df.shape[0]):
+            try:
+                z_str = str(df.iat[r_data, z_col]).strip()
+                if z_str and z_str.lower() != 'nan':
+                    z_values.append(float(z_str))
+                else:
+                    # Zが空欄やnanの場合は0.0を追加するか、あるいはスキップするかを選択
+                    # ここでは0.0を追加する
+                    z_values.append(0.0)
+            except (ValueError, TypeError, IndexError):
+                # データが終わったと判断
+                break
+        
+        return z_values, None
+
+    except Exception as e:
+        return None, f"ファイル解析エラー: {e}"
+
+
 # --- ジオイド高結果Excel出力ページ --- 
 def geoid_excel_output_page():
     st.header("ジオイド高結果Excel出力")
-    st.info("国土地理院のジオイド高計算ツールからダウンロードした .out ファイルをアップロードしてください。")
+    st.info("**ステップ1:** Z座標（標高）を含む元の座標ファイルをアップロードし、**ステップ2:** 国土地理院のジオイド高計算結果 (.out) ファイルをアップロードしてください。")
 
-    uploaded_out_file = st.file_uploader("ジオイド高結果ファイル (.out) を選択", type=['out'])
+    # --- ステップ1: 元の座標ファイルからZ座標を読み込む ---
+    st.subheader("ステップ1: 元の座標ファイル (Z座標) のアップロード")
+    original_coord_file = st.file_uploader("Z座標を含むExcelまたはCSVファイルを選択", type=['xlsx', 'csv', 'xls'], key="z_file_uploader")
+
+    if original_coord_file:
+        z_values, err = extract_z_from_file(original_coord_file)
+        if err:
+            st.error(f"⚠️ {err}")
+            st.session_state['z_values_for_geoid'] = None
+        else:
+            st.success(f"✅ {len(z_values)}個のZ座標を正常に読み込みました。")
+            st.session_state['z_values_for_geoid'] = z_values
+
+    # --- ステップ2: .out ファイルを処理してExcelを生成 ---
+    st.subheader("ステップ2: ジオイド高結果 (.out) のアップロードとExcel生成")
+    uploaded_out_file = st.file_uploader("ジオイド高結果ファイル (.out) を選択", type=['out'], key="out_file_uploader")
 
     if uploaded_out_file:
+        # ステップ1でZ座標が読み込まれているか確認
+        if not st.session_state.get('z_values_for_geoid'):
+            st.warning("⚠️ 先にステップ1でZ座標を含むファイルをアップロードしてください。")
+            return
+
         try:
-            # .out ファイルの内容を読み込み (UTF-8/Shift-JIS自動判別)
+            z_values = st.session_state['z_values_for_geoid']
+            
+            # .out ファイルの処理
             content_bytes = uploaded_out_file.getvalue()
             try:
                 content = content_bytes.decode('utf-8-sig')
@@ -235,20 +312,16 @@ def geoid_excel_output_page():
                 content = content_bytes.decode('shift-jis')
             
             lines = content.splitlines()
-
             data_rows = []
             for line in lines:
                 if not line.strip() or line.strip().startswith('#') or line.strip().startswith('-'):
                     continue
-                
                 parts = line.strip().split()
                 if len(parts) >= 5:
                     try:
                         lat_dms = parts[0]
                         lon_dms = parts[1]
-                        geoid_height_plus_correction = float(parts[4])
-                        
-                        # DMSを10進数に変換
+                        geoid_plus_correction = float(parts[4])
                         lat_decimal = dms_string_to_decimal(lat_dms)
                         lon_decimal = dms_string_to_decimal(lon_dms)
 
@@ -256,52 +329,48 @@ def geoid_excel_output_page():
                             data_rows.append({
                                 "緯度(10進)": lat_decimal,
                                 "経度(10進)": lon_decimal,
-                                "ジオイド高+基準面補正量(m)": geoid_height_plus_correction
+                                "ジオイド高+基準面補正量(m)": geoid_plus_correction
                             })
-                        else:
-                            st.warning(f"⚠️ DMSから10進数への変換に失敗しました: {line}")
-
                     except (ValueError, IndexError):
-                        st.warning(f"⚠️ データ行の解析に失敗しました: {line}")
                         continue
-            
+
             if not data_rows:
                 st.warning("⚠️ .out ファイルから有効なデータが見つかりませんでした。")
                 return
 
-            original_z_coords = st.session_state.get('converted_coords_for_excel', [])
+            if len(z_values) != len(data_rows):
+                st.warning(f"⚠️ Z座標の数 ({len(z_values)}個) とジオイド高データの数 ({len(data_rows)}個) が一致しません。ファイルの内容を確認してください。")
 
+            # Z座標とジオイド高を結合して楕円体高を計算
             output_data = []
             for i, row_data in enumerate(data_rows):
-                original_z = 0.0
-                if i < len(original_z_coords) and 'z' in original_z_coords[i]['input']:
-                    original_z = original_z_coords[i]['input']['z']
-                
-                ellipsoidal_height = original_z + row_data["ジオイド高+基準面補正量(m)"]
-
-                output_data.append({
-                    "緯度(10進)": f"{row_data['緯度(10進)']:.10f}",
-                    "経度(10進)": f"{row_data['経度(10進)']:.10f}",
-                    "楕円体高(m)": f"{ellipsoidal_height:.4f}"
-                })
+                if i < len(z_values):
+                    original_z = z_values[i]
+                    ellipsoidal_height = original_z + row_data["ジオイド高+基準面補正量(m)"]
+                    output_data.append({
+                        "緯度(10進)": f"{row_data['緯度(10進)']:.10f}",
+                        "経度(10進)": f"{row_data['経度(10進)']:.10f}",
+                        "楕円体高(m)": f"{ellipsoidal_height:.4f}"
+                    })
 
             output_df = pd.DataFrame(output_data)
             st.dataframe(output_df, use_container_width=True)
 
+            # Excelダウンロードボタン
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                output_df.to_excel(writer, index=False, sheet_name='ジオイド高結果')
+                output_df.to_excel(writer, index=False, sheet_name='楕円体高計算結果')
             processed_data = output.getvalue()
 
             st.download_button(
-                label="Excelファイル (.xlsx) をダウンロード",
+                label="計算結果をExcelファイルでダウンロード",
                 data=processed_data,
-                file_name="geoid_results_decimal.xlsx",
+                file_name="ellipsoidal_height_results.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
         except Exception as e:
-            st.error(f"⚠️ ファイルの処理中にエラーが発生しました: {e}")
+            st.error(f"⚠️ ファイル処理中にエラーが発生しました: {e}")
 
 # --- Streamlit App --- 
 st.title("座標変換ツール (JGD2011平面直角座標系 → WGS84緯度経度)")
