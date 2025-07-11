@@ -240,7 +240,8 @@ def geoid_excel_output_page():
     z_values = st.session_state.get('z_values_for_geoid')
 
     if z_values:
-        st.success(f"✅ 「座標変換」ページから {len(z_values)}個のZ座標を読み込み済みです。")
+        filename_display = st.session_state.get('original_filename', '入力データ') # ファイル名がなければ「入力データ」
+        st.success(f"✅ 「{filename_display}」から {len(z_values)}個のZ座標を読み込み済みです。")
     else:
         st.warning("「座標変換」ページで座標を入力・変換すると、ここでZ座標が自動的に読み込まれます。")
         st.info("または、ここで直接Z座標を含むファイルをアップロードすることもできます。")
