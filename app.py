@@ -469,14 +469,14 @@ def main():
                                     z_value = coord.get('z', 0.0) # Z値がない場合は0.0
 
                                     zone_info = None
-                                if selected_zone_num == 0: # 0の場合は自動検出
-                                    zone_info = auto_detect_zone(easting, northing)
-                                    if not zone_info:
-                                        st.warning(f"⚠️ 座標 ({easting}, {northing}) の系を自動検出できませんでした。スキップします。")
-                                        continue
-                                else:
-                                    zone_num = selected_zone_num
-                                    zone_info = {"zone": zone_num, "epsg": 6660 + zone_num, "auto_detected": False}
+                                    if selected_zone_num == 0: # 0の場合は自動検出
+                                        zone_info = auto_detect_zone(easting, northing)
+                                        if not zone_info:
+                                            st.warning(f"⚠️ 座標 ({easting}, {northing}) の系を自動検出できませんでした。スキップします。")
+                                            continue
+                                    else:
+                                        zone_num = selected_zone_num
+                                        zone_info = {"zone": zone_num, "epsg": 6660 + zone_num, "auto_detected": False}
 
                                     try:
                                         transformer = Transformer.from_crs(f"EPSG:{zone_info['epsg']}", "EPSG:4326", always_xy=True)
