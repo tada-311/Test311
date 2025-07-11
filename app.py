@@ -485,7 +485,7 @@ def main_app():
 # --- Streamlit アプリケーションのメインエントリポイント ---
 page_selection = st.sidebar.radio("ページ選択", ["X,Y座標の変換", "楕円体高計算と座標のExcel出力"])
 
-if page_selection == "座標変換":
+if page_selection == "X,Y座標の変換":
     st.title("座標変換ツール (JGD2011平面直角座標系 → WGS84緯度経度)")
     PASSWORD = os.environ.get("STREAMLIT_PASSWORD", "test")
     if "password_correct" not in st.session_state:
@@ -501,5 +501,5 @@ if page_selection == "座標変換":
                 st.error("パスワードが間違っています")
     else:
         main_app()
-elif page_selection == "ジオイド高結果Excel出力":
+elif page_selection == "楕円体高計算と座標のExcel出力":
     geoid_excel_output_page()
