@@ -170,23 +170,7 @@ def parse_coordinate_file(uploaded_file):
                     easting_str = str(df.iat[r_data, x_col]).strip()
                     northing_str = str(df.iat[r_data, y_col]).strip()
 
-                    if not easting_str and not northing_str: break
-                    if not easting_str or not northing_str: continue
-
-                    easting = float(easting_str)
-                    northing = float(northing_str)
-
-                    z = 0.0
-                    if z_col is not None:
-                        try:
-                            z_str = str(df.iat[r_data, z_col]).strip()
-                            if z_str and z_str.lower() != 'nan':
-                                z = float(z_str)
-                        except (ValueError, TypeError):
-                            z = 0.0
-
-                    all_coords.append({'easting': easting, 'northing': northing, 'z': z})
-                    all_z_values.append(z)
+                    st.warning("⚠️ 入力された数値から有効な座標ペアを抽出できませんでした。X (Northing), Y (Easting), (Z) の形式で入力されているか確認してください。")
 
                 except (ValueError, TypeError, IndexError):
                     break
