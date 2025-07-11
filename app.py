@@ -334,15 +334,21 @@ def main_app():
 
     if input_method == "ファイルアップロード":
         st.info("Excel (.xlsx) または CSV (.csv) ファイルをアップロードしてください。")
-        uploaded_file = st.file_uploader("ファイルを選択", type=['xlsx', 'csv'], key="file_uploader_key")
         
-        # アップロードされたファイルをセッション状態に保存
-        if uploaded_file is not None:
+        # セッション状態から現在のアップロードファイルを取得
+        current_uploaded_file = st.session_state.get('uploaded_file_data', None)
+        
+        # ファイルアップローダーを表示し、セッション状態のファイルで初期化
+        uploaded_file = st.file_uploader(
+            "ファイルを選択", 
+            type=['xlsx', 'csv'], 
+            key="file_uploader_key",
+            value=current_uploaded_file # ここが重要な変更点
+        )
+        
+        # 新しいファイルがアップロードされた場合、またはファイルがクリアされた場合にセッション状態を更新
+        if uploaded_file is not current_uploaded_file:
             st.session_state['uploaded_file_data'] = uploaded_file
-        
-        # セッション状態にファイルがある場合はそれを使用
-        if 'uploaded_file_data' in st.session_state and st.session_state['uploaded_file_data'] is not None:
-            uploaded_file = st.session_state['uploaded_file_data']
     else:
         coordinate_input_text = st.text_area(
             '**X, Y** の順で座標を入力してください。\n\n'
