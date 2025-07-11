@@ -257,6 +257,7 @@ def geoid_excel_output_page():
 
     # --- Z座標の確認 ---
     z_values = st.session_state.get('z_values_for_geoid')
+    conversion_results = st.session_state.get('conversion_results_for_geoid')
 
     if z_values:
         st.success(f"✅ 「座標変換」ページから {len(z_values)}個のZ座標を読み込み済みです。")
@@ -268,7 +269,7 @@ def geoid_excel_output_page():
 
     uploaded_geoid_file = st.file_uploader("ジオイド高計算結果ファイル (.out) をアップロード", type=['out'])
 
-    if uploaded_geoid_file and z_values:
+    if uploaded_geoid_file and conversion_results:
         try:
             try:
                 geoid_content = uploaded_geoid_file.getvalue().decode('utf-8')
@@ -286,17 +287,17 @@ def geoid_excel_output_page():
                     except ValueError:
                         continue # 数値に変換できない場合はスキップ
             
-            if len(geoid_heights) != len(z_values):
-                st.error(f"⚠️ ジオイド高の数 ({len(geoid_heights)}) がZ座標の数 ({len(z_values)}) と一致しません。")
+            if len(geoid_heights) != len(conversion_results):
+                st.error(f"⚠️ ジオイド高の数 ({len(geoid_heights)}) が変換された座標の数 ({len(conversion_results)}) と一致しません。")
             else:
                 output_data = []
-                for i in range(len(z_values)):
-                    original_z = z_values[i]
+                for i, res in enumerate(conversion_results):
+                    original_z = res["original_z"]
                     geoid_h = geoid_heights[i]
                     ellipsoid_h = original_z + geoid_h
                     output_data.append({
-                        "元のZ座標": original_z,
-                        "ジオイド高": geoid_h,
+                        "緯度": res["result"]["lat"],
+                        "経度": res["result"]["lon"],
                         "楕円体高": ellipsoid_h
                     })
                 
@@ -317,7 +318,7 @@ def geoid_excel_output_page():
                 )
         except Exception as e:
             st.error(f"ジオイド高ファイルの処理中にエラーが発生しました: {e}")
-    elif uploaded_geoid_file and not z_values:
+    elif uploaded_geoid_file and not conversion_results:
         st.warning("ジオイド高計算結果ファイルを処理するには、まず「座標変換」ページで座標を変換し、Z座標を読み込む必要があります。")
 
 # --- メインアプリのロジック ---
@@ -451,8 +452,9 @@ def main_app():
                 )
             st.markdown("ジオイド高計算は [国土地理院 ジオイド高計算](https://vldb.gsi.go.jp/sokuchi/surveycalc/geoid/calcgh/calcframe.html) をご利用ください。")
             
-            # Z座標をセッションに保存
+            # Z座標と変換結果をセッションに保存
             st.session_state['z_values_for_geoid'] = z_values_from_conversion
+            st.session_state['conversion_results_for_geoid'] = results_data
 
 # --- Streamlit アプリケーションのメインエントリポイント ---
 page_selection = st.sidebar.radio("ページ選択", ["座標変換", "ジオイド高結果Excel出力"])
