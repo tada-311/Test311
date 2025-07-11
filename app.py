@@ -276,14 +276,15 @@ def geoid_excel_output_page():
                 geoid_content = uploaded_geoid_file.getvalue().decode('shift-jis')
             geoid_heights = []
             for line in geoid_content.splitlines():
-                # 行全体が数値（と空白）のみで構成されているかをチェック
-                match = re.fullmatch(r'\s*[-+]?\d*\.?\d+\s*', line.strip())
-                if match:
+                line = line.strip()
+                if not line or line.startswith('#'): # 空行またはコメント行をスキップ
+                    continue
+                parts = line.split()
+                if len(parts) >= 5: # 少なくとも5つの要素があることを確認
                     try:
-                        geoid_heights.append(float(match.group(0)))
+                        geoid_heights.append(float(parts[4])) # 5番目の要素（ジオイド高+基準面補正量）を抽出
                     except ValueError:
-                        # 数値に変換できない場合はスキップ
-                        continue
+                        continue # 数値に変換できない場合はスキップ
             
             if len(geoid_heights) != len(z_values):
                 st.error(f"⚠️ ジオイド高の数 ({len(geoid_heights)}) がZ座標の数 ({len(z_values)}) と一致しません。")
