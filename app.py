@@ -82,7 +82,6 @@ def clear_download_state():
     st.session_state['conversion_results_for_geoid'] = None
     st.session_state['uploaded_file_data'] = None
     st.session_state['uploaded_file_content'] = None
-    st.session_state['conversion_executed'] = False # 追加
 
 # --- 座標変換ヘルパー ---
 def auto_detect_zone(easting, northing):
@@ -376,7 +375,6 @@ def main_app():
         display_mode = st.radio("表示モード:", ("要約表示", "詳細表示"), horizontal=True)
 
     if st.button('変換実行', type="primary"):
-        st.markdown("ジオイド高計算は [国土地理院 ジオイド高計算](https://vldb.gsi.go.jp/sokuchi/surveycalc/geoid/calcgh/calcframe.html) をご利用ください。")
         coordinates_to_convert = []
         z_values_from_conversion = []
 
@@ -471,7 +469,8 @@ def main_app():
                     lon_dms = decimal_to_dms_string(res["result"]["lon"])
                     geoid_in_content += f"{lat_dms} {lon_dms}\n"
             
-            if geoid_in_content != "# 緯度(dms)   経度(dms)\n": # ヘッダー行以外にデータがある場合のみボタンを表示
+            if geoid_in_content != "# 緯度(dms)   経度(dms)
+": # ヘッダー行以外にデータがある場合のみボタンを表示
                 st.download_button(
                     label="ジオイド高計算用ファイル (.in) をダウンロード",
                     data=geoid_in_content.encode('shift-jis'), # Shift-JISでエンコード
