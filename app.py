@@ -432,9 +432,14 @@ def main():
                 )
 
             st.header("変換設定")
-            selected_zone = st.selectbox(
-                "平面直角座標系の系を選択してください:",
-                ["自動検出"] + [f"{i}系" for i in range(1, 20)]
+            st.write("平面直角座標系の系番号を入力してください。")
+            st.write("0: 自動検出, 1-19: 各系番号")
+            selected_zone_num = st.number_input(
+                "系番号:",
+                min_value=0,
+                max_value=19,
+                value=0, # Default to 0 for auto-detection
+                step=1
             )
 
             display_mode = st.radio("表示モード:", ("要約表示", "詳細表示"), horizontal=True)
@@ -464,14 +469,14 @@ def main():
                                     z_value = coord.get('z', 0.0) # Z値がない場合は0.0
 
                                     zone_info = None
-                                    if selected_zone == "自動検出":
-                                        zone_info = auto_detect_zone(easting, northing)
-                                        if not zone_info:
-                                            st.warning(f"⚠️ 座標 ({easting}, {northing}) の系を自動検出できませんでした。スキップします。")
-                                            continue
-                                    else:
-                                        zone_num = int(selected_zone.replace("系", ""))
-                                        zone_info = {"zone": zone_num, "epsg": 6660 + zone_num, "auto_detected": False}
+                                if selected_zone_num == 0: # 0の場合は自動検出
+                                    zone_info = auto_detect_zone(easting, northing)
+                                    if not zone_info:
+                                        st.warning(f"⚠️ 座標 ({easting}, {northing}) の系を自動検出できませんでした。スキップします。")
+                                        continue
+                                else:
+                                    zone_num = selected_zone_num
+                                    zone_info = {"zone": zone_num, "epsg": 6660 + zone_num, "auto_detected": False}
 
                                     try:
                                         transformer = Transformer.from_crs(f"EPSG:{zone_info['epsg']}", "EPSG:4326", always_xy=True)
@@ -512,13 +517,13 @@ def main():
                             z_value = coord.get('z', 0.0) # Z値がない場合は0.0
 
                             zone_info = None
-                            if selected_zone == "自動検出":
+                            if selected_zone_num == 0: # 0の場合は自動検出
                                 zone_info = auto_detect_zone(easting, northing)
                                 if not zone_info:
                                     st.warning(f"⚠️ 座標 ({easting}, {northing}) の系を自動検出できませんでした。スキップします。")
                                     continue
                             else:
-                                zone_num = int(selected_zone.replace("系", ""))
+                                zone_num = selected_zone_num
                                 zone_info = {"zone": zone_num, "epsg": 6660 + zone_num, "auto_detected": False}
 
                             try:
