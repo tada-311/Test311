@@ -212,8 +212,8 @@ def parse_coordinate_file(uploaded_file):
         if not all_coords:
             return None, None, "有効な座標データが見つかりませんでした。"
 
-        all_z_values = [c['z'] for c in final_coords]
-        return final_coords, all_z_values, None
+        all_z_values = [c['z'] for c in all_coords]
+        return all_coords, all_z_values, None
     except Exception as e:
         return None, None, f"ファイル解析エラー: {e}"
 
