@@ -111,6 +111,19 @@ def auto_detect_zone(easting, northing):
     return best
 
 # --- ファイル解析関数 ---
+def _extract_float_from_string(s):
+    """Extracts the first floating-point number from a string, ignoring units."""
+    if not isinstance(s, str):
+        return None
+    # This regex finds the first float-like number in the string
+    match = re.search(r'[-+]?\d*\.?\d+', s)
+    if match:
+        try:
+            return float(match.group(0))
+        except (ValueError, TypeError):
+            return None
+    return None
+
 def parse_coordinate_file(uploaded_file):
     """
     アップロードされたファイル（Excel/CSV）を解析し、座標データとZ値のリストを返す統一関数。
@@ -178,17 +191,17 @@ def parse_coordinate_file(uploaded_file):
                     if not easting_str and not northing_str: break
                     if not easting_str or not northing_str: continue
 
-                    easting = float(easting_str)
-                    northing = float(northing_str)
+                    easting = _extract_float_from_string(easting_str)
+                    northing = _extract_float_from_string(northing_str)
+
+                    if easting is None or northing is None: continue
 
                     z = 0.0
                     if z_col is not None:
-                        try:
-                            z_str = str(df.iat[r_data, z_col]).strip()
-                            if z_str and z_str.lower() != 'nan':
-                                z = float(z_str)
-                        except (ValueError, TypeError):
-                            z = 0.0
+                        z_str = str(df.iat[r_data, z_col]).strip()
+                        z_val = _extract_float_from_string(z_str)
+                        if z_val is not None:
+                            z = z_val
 
                     all_coords.append({'easting': easting, 'northing': northing, 'z': z})
                     all_z_values.append(z)
