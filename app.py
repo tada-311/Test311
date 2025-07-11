@@ -80,7 +80,8 @@ def clear_download_state():
     st.session_state['z_values_for_geoid'] = None
     st.session_state['original_filename'] = None
     st.session_state['conversion_results_for_geoid'] = None
-    st.session_state['uploaded_file_data'] = None # 追加
+    st.session_state['uploaded_file_data'] = None
+    st.session_state['uploaded_file_content'] = None # 追加
 
 # --- 座標変換ヘルパー ---
 def auto_detect_zone(easting, northing):
@@ -335,20 +336,27 @@ def main_app():
     if input_method == "ファイルアップロード":
         st.info("Excel (.xlsx) または CSV (.csv) ファイルをアップロードしてください。")
         
-        # セッション状態から現在のアップロードファイルを取得
-        current_uploaded_file = st.session_state.get('uploaded_file_data', None)
-        
-        # ファイルアップローダーを表示し、セッション状態のファイルで初期化
-        uploaded_file = st.file_uploader(
+        # ファイルアップローダーを表示
+        uploaded_file_obj = st.file_uploader(
             "ファイルを選択", 
             type=['xlsx', 'csv'], 
-            key="file_uploader_key",
-            value=current_uploaded_file # ここが重要な変更点
+            key="file_uploader_key"
         )
         
         # 新しいファイルがアップロードされた場合、またはファイルがクリアされた場合にセッション状態を更新
-        if uploaded_file is not current_uploaded_file:
-            st.session_state['uploaded_file_data'] = uploaded_file
+        if uploaded_file_obj is not None:
+            st.session_state['uploaded_file_content'] = uploaded_file_obj.getvalue()
+            st.session_state['uploaded_file_name'] = uploaded_file_obj.name
+        elif 'uploaded_file_content' not in st.session_state:
+            st.session_state['uploaded_file_content'] = None
+            st.session_state['uploaded_file_name'] = None
+
+        # 変換処理で使用するファイルデータを設定
+        if st.session_state['uploaded_file_content'] is not None:
+            uploaded_file = io.BytesIO(st.session_state['uploaded_file_content'])
+            uploaded_file.name = st.session_state['uploaded_file_name']
+        else:
+            uploaded_file = None
     else:
         coordinate_input_text = st.text_area(
             '**X, Y** の順で座標を入力してください。\n\n'
