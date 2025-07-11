@@ -258,6 +258,7 @@ def geoid_excel_output_page():
     # --- Z座標の確認 ---
     z_values = st.session_state.get('z_values_for_geoid')
     conversion_results = st.session_state.get('conversion_results_for_geoid')
+    filename_display = st.session_state.get('original_filename', '入力データ') # ファイル名がなければ「入力データ」
 
     if z_values:
         st.success(f"✅ 「座標変換」ページから {len(z_values)}個のZ座標を読み込み済みです。")
