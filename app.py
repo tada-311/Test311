@@ -469,8 +469,7 @@ def main_app():
                     lon_dms = decimal_to_dms_string(res["result"]["lon"])
                     geoid_in_content += f"{lat_dms} {lon_dms}\n"
             
-            if geoid_in_content != "# 緯度(dms)   経度(dms)
-": # ヘッダー行以外にデータがある場合のみボタンを表示
+            if geoid_in_content != "# 緯度(dms)   経度(dms)\n": # ヘッダー行以外にデータがある場合のみボタンを表示
                 st.download_button(
                     label="ジオイド高計算用ファイル (.in) をダウンロード",
                     data=geoid_in_content.encode('shift-jis'), # Shift-JISでエンコード
