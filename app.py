@@ -74,6 +74,12 @@ def dms_string_to_decimal(dms_string):
     except (ValueError, IndexError):
         return None
 
+# --- セッション状態クリア関数 ---
+def clear_download_state():
+    """ダウンロード後にセッション情報をクリアするコールバック関数"""
+    st.session_state['z_values_for_geoid'] = None
+    st.session_state['original_filename'] = None
+
 # --- 座標変換ヘルパー ---
 def auto_detect_zone(easting, northing):
     candidates = []
@@ -349,7 +355,8 @@ def geoid_excel_output_page():
                 label="計算結果をExcelファイルでダウンロード",
                 data=processed_data,
                 file_name=output_filename,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                on_click=clear_download_state # ダウンロードボタンが押されたらコールバックを実行
             )
 
         except Exception as e:
