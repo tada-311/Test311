@@ -424,7 +424,7 @@ def main_app():
                     else:
                         summary_data.append({"点": res["id"], "緯度": "変換失敗", "経度": "", "系": "", "元のZ": ""})
                 st.dataframe(summary_data, use_container_width=True)
-                st.caption("* が付いている系番号は自動判別されたものです。")
+                st.caption("\* が付いている系番号は自動判別されたものです。")
 
             # ジオイド高計算用ファイル出力ボタン
             geoid_in_content = "# 緯度(dms)   経度(dms)\n"
