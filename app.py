@@ -79,6 +79,7 @@ def clear_download_state():
     """ダウンロード後にセッション情報をクリアするコールバック関数"""
     st.session_state['z_values_for_geoid'] = None
     st.session_state['original_filename'] = None
+    st.session_state['conversion_results_for_geoid'] = None # 追加
 
 # --- 座標変換ヘルパー ---
 def auto_detect_zone(easting, northing):
@@ -340,7 +341,8 @@ def main_app():
             '例:\n'
             '`-36258.580  -147524.100`\n'
             '`X=-36258.580, Y=-147524.100`',
-            height=150
+            height=150,
+            key="coordinate_input_text_area" # セッション状態に紐付けるキーを追加
         )
 
     col1, col2 = st.columns(2)
