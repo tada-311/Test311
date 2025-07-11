@@ -270,7 +270,10 @@ def geoid_excel_output_page():
 
     if uploaded_geoid_file and z_values:
         try:
-            geoid_content = uploaded_geoid_file.getvalue().decode('shift-jis')
+            try:
+                geoid_content = uploaded_geoid_file.getvalue().decode('utf-8')
+            except UnicodeDecodeError:
+                geoid_content = uploaded_geoid_file.getvalue().decode('shift-jis')
             geoid_heights = []
             for line in geoid_content.splitlines():
                 # 数値のみを抽出し、最初の数値をジオイド高として採用
