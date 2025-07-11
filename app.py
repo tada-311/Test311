@@ -343,6 +343,7 @@ def main_app():
         # セッション状態にファイルがある場合はそれを使用
         if 'uploaded_file_data' in st.session_state and st.session_state['uploaded_file_data'] is not None:
             uploaded_file = st.session_state['uploaded_file_data']
+    else:
         coordinate_input_text = st.text_area(
             '**X, Y** の順で座標を入力してください。\n\n'
             '1行に1座標ずつ入力します。数値はスペース、カンマ、タブなどで区切ってください。\n\n'
