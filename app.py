@@ -392,171 +392,186 @@ def geoid_excel_output_page():
             st.info("ファイル形式が正しいか、またはShift-JISエンコードであることを確認してください。")
 
 # --- Streamlit App --- 
+PASSWORD = "test" # パスワードをハードコード
+
 def main():
-    st.sidebar.title("ナビゲーション")
-    page = st.sidebar.radio("ページを選択", ["座標変換", "ジオイド高結果Excel出力"])
+    if 'password_correct' not in st.session_state:
+        st.session_state['password_correct'] = False
 
-    if page == "座標変換":
-        st.title("座標変換ツール (JGD2011平面直角座標系 → WGS84緯度経度)")
+    if not st.session_state['password_correct']:
+        st.title("ログイン")
+        password_input = st.text_input("パスワードを入力してください", type="password")
+        if st.button("ログイン"):
+            if password_input == PASSWORD:
+                st.session_state['password_correct'] = True
+                st.rerun()
+            else:
+                st.error("パスワードが間違っています")
+    else:
+        st.sidebar.title("ナビゲーション")
+        page = st.sidebar.radio("ページを選択", ["座標変換", "ジオイド高結果Excel出力"])
 
-        st.header("入力方法の選択")
-        input_method = st.radio("座標の入力方法を選択してください:", ("ファイルアップロード", "テキスト入力"))
+        if page == "座標変換":
+            st.title("座標変換ツール (JGD2011平面直角座標系 → WGS84緯度経度)")
 
-        coordinates_to_convert = []
-        uploaded_file = None
-        coordinate_input_text = ""
+            st.header("入力方法の選択")
+            input_method = st.radio("座標の入力方法を選択してください:", ("ファイルアップロード", "テキスト入力"))
 
-        if input_method == "ファイルアップロード":
-            uploaded_file = st.file_uploader("座標ファイル (CSV/Excel) をアップロードしてください", type=["csv", "xlsx", "xls"])
-            if uploaded_file:
-                st.info("ファイルからX, Y, Z座標を自動的に検出します。")
-        else:
-            coordinate_input_text = st.text_area(
-                "座標をテキストで入力してください (X Y Z または X Y の形式で複数行可、スペース区切り):",
-                "例:\n15000.000 25000.000 100.000\n15001.234 25002.567"
-            )
-
-        st.header("変換設定")
-        selected_zone = st.selectbox(
-            "平面直角座標系の系を選択してください (自動検出を推奨):",
-            ["自動検出"] + [f"{i}系" for i in range(1, 20)]
-        )
-
-        display_mode = st.radio("表示モード:", ("要約表示", "詳細表示"))
-
-        if st.button('変換実行', type="primary"):
-            # 変換実行時にファイル名をリセット
-            st.session_state['original_filename'] = None
-            st.session_state['converted_coords_for_excel'] = [] # Excel出力用に変換結果を保存するリスト
+            coordinates_to_convert = []
+            uploaded_file = None
+            coordinate_input_text = ""
 
             if input_method == "ファイルアップロード":
+                uploaded_file = st.file_uploader("座標ファイル (CSV/Excel) をアップロードしてください", type=["csv", "xlsx", "xls"])
                 if uploaded_file:
-                    # 元のファイル名をセッションステートに保存
-                    st.session_state['original_filename'] = uploaded_file.name
-                    with st.spinner('ファイルを処理中...'):
-                        coords, err = parse_coordinate_file(uploaded_file)
-                        if err:
-                            st.error(f"⚠️ {err}")
-                            st.session_state['converted_coords'] = []
-                        elif coords:
-                            st.success(f"✅ {len(coords)}個の座標を読み込みました。")
-                            st.session_state['converted_coords'] = []
-                            st.session_state['z_values_for_geoid'] = [] # ジオイド高計算用にZ値を保存
+                    st.info("ファイルからX, Y, Z座標を自動的に検出します。")
+            else:
+                coordinate_input_text = st.text_area(
+                    "座標をテキストで入力してください (X Y Z または X Y の形式で複数行可、スペース区切り):",
+                    "例:\n15000.000 25000.000 100.000\n15001.234 25002.567"
+                )
 
-                            for i, coord in enumerate(coords):
-                                easting = coord['easting']
-                                northing = coord['northing']
-                                z_value = coord.get('z', 0.0) # Z値がない場合は0.0
+            st.header("変換設定")
+            selected_zone = st.selectbox(
+                "平面直角座標系の系を選択してください (自動検出を推奨):",
+                ["自動検出"] + [f"{i}系" for i in range(1, 20)]
+            )
 
-                                zone_info = None
-                                if selected_zone == "自動検出":
-                                    zone_info = auto_detect_zone(easting, northing)
-                                    if not zone_info:
-                                        st.warning(f"⚠️ 座標 ({easting}, {northing}) の系を自動検出できませんでした。スキップします。")
+            display_mode = st.radio("表示モード:", ("要約表示", "詳細表示"))
+
+            if st.button('変換実行', type="primary"):
+                # 変換実行時にファイル名をリセット
+                st.session_state['original_filename'] = None
+                st.session_state['converted_coords_for_excel'] = [] # Excel出力用に変換結果を保存するリスト
+
+                if input_method == "ファイルアップロード":
+                    if uploaded_file:
+                        # 元のファイル名をセッションステートに保存
+                        st.session_state['original_filename'] = uploaded_file.name
+                        with st.spinner('ファイルを処理中...'):
+                            coords, err = parse_coordinate_file(uploaded_file)
+                            if err:
+                                st.error(f"⚠️ {err}")
+                                st.session_state['converted_coords'] = []
+                            elif coords:
+                                st.success(f"✅ {len(coords)}個の座標を読み込みました。")
+                                st.session_state['converted_coords'] = []
+                                st.session_state['z_values_for_geoid'] = [] # ジオイド高計算用にZ値を保存
+
+                                for i, coord in enumerate(coords):
+                                    easting = coord['easting']
+                                    northing = coord['northing']
+                                    z_value = coord.get('z', 0.0) # Z値がない場合は0.0
+
+                                    zone_info = None
+                                    if selected_zone == "自動検出":
+                                        zone_info = auto_detect_zone(easting, northing)
+                                        if not zone_info:
+                                            st.warning(f"⚠️ 座標 ({easting}, {northing}) の系を自動検出できませんでした。スキップします。")
+                                            continue
+                                    else:
+                                        zone_num = int(selected_zone.replace("系", ""))
+                                        zone_info = {"zone": zone_num, "epsg": 6660 + zone_num, "auto_detected": False}
+
+                                    try:
+                                        transformer = Transformer.from_crs(f"EPSG:{zone_info['epsg']}", "EPSG:4326", always_xy=True)
+                                        lon, lat = transformer.transform(easting, northing)
+
+                                        # 楕円体高の計算 (Z座標 + ジオイド高) - ここではジオイド高はまだ不明なので、Z座標をそのまま渡す
+                                        # ジオイド高はgeoid_excel_output_pageで処理されるため、ここではZ座標をそのまま保存
+                                        ellipsoidal_height_display = f"Z={z_value:.3f}m" # 初期表示はZ座標
+
+                                        result = {
+                                            "input": {"easting": easting, "northing": northing, "z": z_value},
+                                            "output": {"lat": lat, "lon": lon, "ellipsoidal_height": ellipsoidal_height_display},
+                                            "zone_info": zone_info
+                                        }
+                                        st.session_state['converted_coords'].append(result)
+                                        st.session_state['z_values_for_geoid'].append(z_value) # Z値をリストに追加
+                                        st.session_state['converted_coords_for_excel'].append(result) # Excel出力用に結果を保存
+
+                                    except Exception as e:
+                                        st.error(f"変換エラー (X: {easting}, Y: {northing}, 系: {zone_info['zone']}系): {e}")
                                         continue
-                                else:
-                                    zone_num = int(selected_zone.replace("系", ""))
-                                    zone_info = {"zone": zone_num, "epsg": 6660 + zone_num, "auto_detected": False}
+                            else:
+                                st.warning("⚠️ ファイルから有効な座標データを抽出できませんでした。")
+                    else:
+                        st.warning("⚠️ ファイルが選択されていません。")
+                else: # テキスト入力の場合
+                    coordinates_to_convert = parse_coordinate_text(coordinate_input_text)
+                    if coordinates_to_convert:
+                        st.session_state['converted_coords'] = []
+                        st.session_state['z_values_for_geoid'] = [] # ジオイド高計算用にZ値を保存
+                        st.session_state['converted_coords_for_excel'] = [] # Excel出力用に変換結果を保存するリスト
+                        # テキスト入力用のデフォルトファイル名を設定
+                        st.session_state['original_filename'] = "text_input.xlsx"
 
-                                try:
-                                    transformer = Transformer.from_crs(f"EPSG:{zone_info['epsg']}", "EPSG:4326", always_xy=True)
-                                    lon, lat = transformer.transform(easting, northing)
+                        for i, coord in enumerate(coordinates_to_convert):
+                            easting = coord['easting']
+                            northing = coord['northing']
+                            z_value = coord.get('z', 0.0) # Z値がない場合は0.0
 
-                                    # 楕円体高の計算 (Z座標 + ジオイド高) - ここではジオイド高はまだ不明なので、Z座標をそのまま渡す
-                                    # ジオイド高はgeoid_excel_output_pageで処理されるため、ここではZ座標をそのまま保存
-                                    ellipsoidal_height_display = f"Z={z_value:.3f}m" # 初期表示はZ座標
-
-                                    result = {
-                                        "input": {"easting": easting, "northing": northing, "z": z_value},
-                                        "output": {"lat": lat, "lon": lon, "ellipsoidal_height": ellipsoidal_height_display},
-                                        "zone_info": zone_info
-                                    }
-                                    st.session_state['converted_coords'].append(result)
-                                    st.session_state['z_values_for_geoid'].append(z_value) # Z値をリストに追加
-                                    st.session_state['converted_coords_for_excel'].append(result) # Excel出力用に結果を保存
-
-                                except Exception as e:
-                                    st.error(f"変換エラー (X: {easting}, Y: {northing}, 系: {zone_info['zone']}系): {e}")
+                            zone_info = None
+                            if selected_zone == "自動検出":
+                                zone_info = auto_detect_zone(easting, northing)
+                                if not zone_info:
+                                    st.warning(f"⚠️ 座標 ({easting}, {northing}) の系を自動検出できませんでした。スキップします。")
                                     continue
-                        else:
-                            st.warning("⚠️ ファイルから有効な座標データを抽出できませんでした。")
-                else:
-                    st.warning("⚠️ ファイルが選択されていません。")
-            else: # テキスト入力の場合
-                coordinates_to_convert = parse_coordinate_text(coordinate_input_text)
-                if coordinates_to_convert:
-                    st.session_state['converted_coords'] = []
-                    st.session_state['z_values_for_geoid'] = [] # ジオイド高計算用にZ値を保存
-                    st.session_state['converted_coords_for_excel'] = [] # Excel出力用に変換結果を保存するリスト
-                    # テキスト入力用のデフォルトファイル名を設定
-                    st.session_state['original_filename'] = "text_input.xlsx"
+                            else:
+                                zone_num = int(selected_zone.replace("系", ""))
+                                zone_info = {"zone": zone_num, "epsg": 6660 + zone_num, "auto_detected": False}
 
-                    for i, coord in enumerate(coordinates_to_convert):
-                        easting = coord['easting']
-                        northing = coord['northing']
-                        z_value = coord.get('z', 0.0) # Z値がない場合は0.0
+                            try:
+                                transformer = Transformer.from_crs(f"EPSG:{zone_info['epsg']}", "EPSG:4326", always_xy=True)
+                                lon, lat = transformer.transform(easting, northing)
 
-                        zone_info = None
-                        if selected_zone == "自動検出":
-                            zone_info = auto_detect_zone(easting, northing)
-                            if not zone_info:
-                                st.warning(f"⚠️ 座標 ({easting}, {northing}) の系を自動検出できませんでした。スキップします。")
+                                ellipsoidal_height_display = f"Z={z_value:.3f}m" # 初期表示はZ座標
+
+                                result = {
+                                    "input": {"easting": easting, "northing": northing, "z": z_value},
+                                    "output": {"lat": lat, "lon": lon, "ellipsoidal_height": ellipsoidal_height_display},
+                                    "zone_info": zone_info
+                                }
+                                st.session_state['converted_coords'].append(result)
+                                st.session_state['z_values_for_geoid'].append(z_value) # Z値をリストに追加
+                                st.session_state['converted_coords_for_excel'].append(result) # Excel出力用に結果を保存
+
+                            except Exception as e:
+                                st.error(f"変換エラー (X: {easting}, Y: {northing}, 系: {zone_info['zone']}系): {e}")
                                 continue
-                        else:
-                            zone_num = int(selected_zone.replace("系", ""))
-                            zone_info = {"zone": zone_num, "epsg": 6660 + zone_num, "auto_detected": False}
+                    else:
+                        st.warning("⚠️ 変換対象の座標が見つかりませんでした。")
 
-                        try:
-                            transformer = Transformer.from_crs(f"EPSG:{zone_info['epsg']}", "EPSG:4326", always_xy=True)
-                            lon, lat = transformer.transform(easting, northing)
+            if 'converted_coords' in st.session_state and st.session_state['converted_coords']:
+                st.subheader("変換結果")
+                if display_mode == "要約表示":
+                    summary_data = []
+                    for coord in st.session_state['converted_coords']:
+                        summary_data.append({
+                            "入力X": f"{coord['input']['easting']:.3f}",
+                            "入力Y": f"{coord['input']['northing']:.3f}",
+                            "入力Z": f"{coord['input']['z']:.3f}",
+                            "出力緯度": f"{coord['output']['lat']:.10f}",
+                            "出力経度": f"{coord['output']['lon']:.10f}",
+                            "楕円体高": coord['output']['ellipsoidal_height'], # Z値そのまま
+                            "系": f"{coord['zone_info']['zone']}系" + (" (自動検出)" if coord['zone_info']['auto_detected'] else "")
+                        })
+                    st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
+                else: # 詳細表示
+                    for i, coord in enumerate(st.session_state['converted_coords']):
+                        st.write(f"--- 座標 {i+1} ---")
+                        st.write(f"**入力座標:**")
+                        st.write(f"  X: {coord['input']['easting']:.3f}")
+                        st.write(f"  Y: {coord['input']['northing']:.3f}")
+                        st.write(f"  Z: {coord['input']['z']:.3f}")
+                        st.write(f"**検出された系:** {coord['zone_info']['zone']}系" + (" (自動検出)" if coord['zone_info']['auto_detected'] else ""))
+                        st.write(f"**変換結果 (WGS84):**")
+                        st.write(f"  緯度: {coord['output']['lat']:.10f}")
+                        st.write(f"  経度: {coord['output']['lon']:.10f}")
+                        st.write(f"  楕円体高: {coord['output']['ellipsoidal_height']}") # Z値そのまま
 
-                            ellipsoidal_height_display = f"Z={z_value:.3f}m" # 初期表示はZ座標
-
-                            result = {
-                                "input": {"easting": easting, "northing": northing, "z": z_value},
-                                "output": {"lat": lat, "lon": lon, "ellipsoidal_height": ellipsoidal_height_display},
-                                "zone_info": zone_info
-                            }
-                            st.session_state['converted_coords'].append(result)
-                            st.session_state['z_values_for_geoid'].append(z_value) # Z値をリストに追加
-                            st.session_state['converted_coords_for_excel'].append(result) # Excel出力用に結果を保存
-
-                        except Exception as e:
-                            st.error(f"変換エラー (X: {easting}, Y: {northing}, 系: {zone_info['zone']}系): {e}")
-                            continue
-                else:
-                    st.warning("⚠️ 変換対象の座標が見つかりませんでした。")
-
-        if 'converted_coords' in st.session_state and st.session_state['converted_coords']:
-            st.subheader("変換結果")
-            if display_mode == "要約表示":
-                summary_data = []
-                for coord in st.session_state['converted_coords']:
-                    summary_data.append({
-                        "入力X": f"{coord['input']['easting']:.3f}",
-                        "入力Y": f"{coord['input']['northing']:.3f}",
-                        "入力Z": f"{coord['input']['z']:.3f}",
-                        "出力緯度": f"{coord['output']['lat']:.10f}",
-                        "出力経度": f"{coord['output']['lon']:.10f}",
-                        "楕円体高": coord['output']['ellipsoidal_height'], # Z値そのまま
-                        "系": f"{coord['zone_info']['zone']}系" + (" (自動検出)" if coord['zone_info']['auto_detected'] else "")
-                    })
-                st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
-            else: # 詳細表示
-                for i, coord in enumerate(st.session_state['converted_coords']):
-                    st.write(f"--- 座標 {i+1} ---")
-                    st.write(f"**入力座標:**")
-                    st.write(f"  X: {coord['input']['easting']:.3f}")
-                    st.write(f"  Y: {coord['input']['northing']:.3f}")
-                    st.write(f"  Z: {coord['input']['z']:.3f}")
-                    st.write(f"**検出された系:** {coord['zone_info']['zone']}系" + (" (自動検出)" if coord['zone_info']['auto_detected'] else ""))
-                    st.write(f"**変換結果 (WGS84):**")
-                    st.write(f"  緯度: {coord['output']['lat']:.10f}")
-                    st.write(f"  経度: {coord['output']['lon']:.10f}")
-                    st.write(f"  楕円体高: {coord['output']['ellipsoidal_height']}") # Z値そのまま
-
-    elif page == "ジオイド高結果Excel出力":
-        geoid_excel_output_page()
+        elif page == "ジオイド高結果Excel出力":
+            geoid_excel_output_page()
 
 if __name__ == "__main__":
     main()
