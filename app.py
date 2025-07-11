@@ -312,7 +312,7 @@ def geoid_excel_output_page():
                 st.download_button(
                     label="結果をExcelでダウンロード",
                     data=output.getvalue(),
-                    file_name="geoid_results.xlsx",
+                    file_name=f"変換_{filename_display.replace('.xlsx', '').replace('.xls', '')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     on_click=clear_download_state # ダウンロード後にセッションをクリア
                 )
