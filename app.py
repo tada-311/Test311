@@ -433,7 +433,7 @@ def main():
 
             st.header("変換設定")
             selected_zone = st.selectbox(
-                "平面直角座標系の系を選択してください (自動検出を推奨):",
+                "平面直角座標系の系を選択してください:",
                 ["自動検出"] + [f"{i}系" for i in range(1, 20)]
             )
 
