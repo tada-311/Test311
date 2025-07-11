@@ -1,11 +1,11 @@
+@ -1,79 +1,85 @@
 import streamlit as st
 from pyproj import Transformer
 from geopy.distance import geodesic
 import os
 import re
 import io
-import pandas as pd
-import numpy as np
+import pandas as pd # pandasを再インポート
 
 # --- バージョン情報: 2024-07-10_v3.0 - 座標順序修正とジオイド高Excel出力機能追加 ---
 
@@ -84,177 +84,13 @@ def clear_download_state():
 # --- 座標変換ヘルパー ---
 def auto_detect_zone(easting, northing):
     candidates = []
-    for z_ in range(1, 20):
-        epsg_code = 6660 + z_
-        try:
-            transformer = Transformer.from_crs(f"EPSG:{epsg_code}", "EPSG:4326", always_xy=True)
-            lon, lat = transformer.transform(easting, northing)
-            if (
-                japan_bounds["lat_min"] <= lat <= japan_bounds["lat_max"] and
-                japan_bounds["lon_min"] <= lon <= japan_bounds["lon_max"]
-            ):
-                candidates.append({
-                    "zone": z_,
-                    "epsg": epsg_code,
-                    "lat": lat,
-                    "lon": lon
-                })
-        except Exception:
-            continue
-    if not candidates:
-        return None
-    # ここでは仮に大分県の座標を基準点とする
-    reference_point = (33.23, 131.61) 
-    for c in candidates:
-        c["distance"] = geodesic((c["lat"], c["lon"]), reference_point).meters
-    best = min(candidates, key=lambda x: x["distance"])
-    best["auto_detected"] = True
-    return best
+@ -349,7 +355,8 @@ def geoid_excel_output_page():
+                label="計算結果をExcelファイルでダウンロード",
+                data=processed_data,
+                file_name=output_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                on_click=clear_download_state # ダウンロードボタンが押されたらコールバックを実行
+            )
 
-# --- ファイル解析関数 ---
-def _extract_float_from_string(s):
-    """Extracts the first floating-point number from a string, ignoring units and other non-numeric characters."""
-    if not isinstance(s, str):
-        return None
-    # This regex finds the first float-like number in the string
-    match = re.search(r'[-+]?\d*\.?\d+', s)
-    if match:
-        try:
-            return float(match.group(0))
-        except (ValueError, TypeError):
-            return None
-    return None
-
-def parse_coordinate_file(uploaded_file):
-    """
-    アップロードされたファイル（Excel/CSV）を解析し、座標データとZ値のリストを返す統一関数。
-    セル内の文字列からX,Y,Zのラベルと数値を柔軟に抽出し、座標を認識する。
-    戻り値: (all_coords, all_z_values, error_message)
-    """
-    if uploaded_file is None:
-        return None, None, "ファイルがアップロードされていません。"
-    try:
-        ext = os.path.splitext(uploaded_file.name)[1].lower()
-        if ext == '.csv':
-            content = uploaded_file.getvalue()
-            try:
-                df = pd.read_csv(io.StringIO(content.decode('utf-8')), header=None, dtype=str)
-            except UnicodeDecodeError:
-                df = pd.read_csv(io.StringIO(content.decode('shift-jis')), header=None, dtype=str)
-        elif ext in ['.xlsx', '.xls']:
-            df = pd.read_excel(uploaded_file, header=None, engine='openpyxl', dtype=str)
-        else:
-            return None, None, "サポートされていないファイル形式です。"
-
-        all_x_data = [] # List of {'value': float, 'row': int, 'col': int}
-        all_y_data = []
-        all_z_data = []
-
-        # Scan all cells to find X, Y, Z values
-        for r in range(df.shape[0]):
-            for c in range(df.shape[1]):
-                cell_content = str(df.iat[r, c]).strip()
-                if not cell_content or cell_content.lower() == 'nan':
-                    continue
-
-                # Extract the first float from the cell content
-                num_val = _extract_float_from_string(cell_content)
-
-                if num_val is not None:
-                    # Check if the cell content contains X, Y, or Z labels
-                    if re.search(r'[Xx]', cell_content, re.IGNORECASE):
-                        all_x_data.append({'value': num_val, 'row': r, 'col': c})
-                    elif re.search(r'[Yy]', cell_content, re.IGNORECASE):
-                        all_y_data.append({'value': num_val, 'row': r, 'col': c})
-                    elif re.search(r'(?:[Zz]|標高|height)', cell_content, re.IGNORECASE):
-                        all_z_data.append({'value': num_val, 'row': r, 'col': c})
-
-        # Now, try to group these into points.
-        # Heuristic: Look for X, Y, Z that are close to each other, prioritizing column-wise grouping
-        # (e.g., X in A1, Y in A2, Z in A3 forms one point)
-
-        final_coords = []
-        used_y_indices = set()
-        used_z_indices = set()
-        
-        for x_item in all_x_data:
-            x_val = x_item['value']
-            x_row = x_item['row']
-            x_col = x_item['col']
-            
-            found_y = None
-            found_z = None
-
-            # Try to find Y and Z in the same row or same column, prioritizing same row
-            # Search for Y
-            for i, y_item in enumerate(all_y_data):
-                if i in used_y_indices: continue
-                if y_item['row'] == x_row: # Same row
-                    found_y = y_item
-                    used_y_indices.add(i)
-                    break
-                elif y_item['col'] == x_col: # Same column
-                    found_y = y_item
-                    used_y_indices.add(i)
-                    break
-            
-            # Search for Z
-            for i, z_item in enumerate(all_z_data):
-                if i in used_z_indices: continue
-                if z_item['row'] == x_row: # Same row
-                    found_z = z_item
-                    used_z_indices.add(i)
-                    break
-                elif z_item['col'] == x_col: # Same column
-                    found_z = z_item
-                    used_z_indices.add(i)
-                    break
-
-            if found_y: # Y is mandatory for a coordinate point
-                northing = found_y['value']
-                easting = x_val
-                z = found_z['value'] if found_z else 0.0
-                final_coords.append({'easting': easting, 'northing': northing, 'z': z})
-
-        if not final_coords:
-            return None, None, "有効な座標データが見つかりませんでした。"
-
-        all_z_values = [c['z'] for c in final_coords]
-        return final_coords, all_z_values, None
-    except Exception as e:
-        return None, None, f"ファイル解析エラー: {e}"
-
-# --- Streamlit アプリケーションのメインロジック ---
-def main():
-    st.title("座標変換ツール")
-
-    st.sidebar.header("設定")
-    # ここにサイドバーのオプションを追加できます
-
-    st.header("ファイルアップロード")
-    uploaded_file = st.file_uploader("座標ファイル (CSV/Excel) をアップロードしてください", type=["csv", "xlsx", "xls"])
-
-    if uploaded_file is not None:
-        st.write("ファイルがアップロードされました:", uploaded_file.name)
-        all_coords, all_z_values, error_message = parse_coordinate_file(uploaded_file)
-
-        if error_message:
-            st.error(error_message)
-        elif all_coords:
-            st.success(f"{len(all_coords)} 個の座標を読み込みました。")
-            # ここで座標変換ロジックを呼び出し、結果を表示する
-            # 例:
-            # for coord in all_coords:
-            #     st.write(f"X: {coord['easting']}, Y: {coord['northing']}, Z: {coord['z']}")
-        else:
-            st.warning("ファイルから有効な座標データを抽出できませんでした。")
-
-    # ジオイド高計算ツールのセクション（別ページとして実装予定の部分）
-    st.header("ジオイド高計算ツール")
-    st.write("この機能は別のページで提供されます。")
-    if st.button("ダウンロード状態をクリア"):
-        clear_download_state()
-        st.success("ダウンロード状態がクリアされました。")
-
-if __name__ == "__main__":
-    main()
+        except Exception as e:
