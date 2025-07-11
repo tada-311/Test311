@@ -1,4 +1,3 @@
-@ -1,260 +1,261 @@
 import streamlit as st
 from pyproj import Transformer
 from geopy.distance import geodesic
@@ -261,74 +260,72 @@ def geoid_excel_output_page():
 
     # --- .out ファイルのアップロードと処理 ---
     st.subheader("ジオイド高結果 (.out) のアップロードとExcel生成")
-@ -318,13 +319,35 @@ def geoid_excel_output_page():
-            # Excelダウンロードボタン
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                output_df.to_excel(writer, index=False, sheet_name='楕円体高計算結果')
-                sheet_name = '楕円体高計算結果'
-                output_df.to_excel(writer, index=False, sheet_name=sheet_name)
-                
-                # ここから列幅自動調整処理
-                worksheet = writer.sheets[sheet_name]
-                for column_cells in worksheet.columns:
-                    # 各列の最大文字数を計算 (ヘッダーも含む)
-                    max_length = 0
-                    column_letter = column_cells[0].column_letter # 列のアルファベットを取得
-                    for cell in column_cells:
-                        try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
-                        except:
-                            pass
-                    # 少し余裕を持たせた幅に調整
-                    adjusted_width = (max_length + 2)
-                    worksheet.column_dimensions[column_letter].width = adjusted_width
 
-            processed_data = output.getvalue()
+    # Excelダウンロードボタン
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        output_df.to_excel(writer, index=False, sheet_name='楕円体高計算結果')
+        sheet_name = '楕円体高計算結果'
+        output_df.to_excel(writer, index=False, sheet_name=sheet_name)
+        
+        # ここから列幅自動調整処理
+        worksheet = writer.sheets[sheet_name]
+        for column_cells in worksheet.columns:
+            # 各列の最大文字数を計算 (ヘッダーも含む)
+            max_length = 0
+            column_letter = column_cells[0].column_letter # 列のアルファベットを取得
+            for cell in column_cells:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            # 少し余裕を持たせた幅に調整
+            adjusted_width = (max_length + 2)
+            worksheet.column_dimensions[column_letter].width = adjusted_width
 
-            # 動的なファイル名を生成
-            original_filename = st.session_state.get('original_filename', 'default_results.xlsx')
-            output_filename = f"変換_{original_filename}"
+    processed_data = output.getvalue()
 
-            st.download_button(
-                label="計算結果をExcelファイルでダウンロード",
-                data=processed_data,
-                file_name="ellipsoidal_height_results.xlsx",
-                file_name=output_filename,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+    # 動的なファイル名を生成
+    original_filename = st.session_state.get('original_filename', 'default_results.xlsx')
+    output_filename = f"変換_{original_filename}"
 
-@ -381,8 +404,13 @@ else:
+    st.download_button(
+        label="計算結果をExcelファイルでダウンロード",
+        data=processed_data,
+        file_name="ellipsoidal_height_results.xlsx",
+        file_name=output_filename,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
-        if st.button('変換実行', type="primary"):
-            coordinates_to_convert = []
-            # 変換実行時にファイル名をリセット
-            st.session_state['original_filename'] = None
 
-            if input_method == "ファイルアップロード":
-                if uploaded_file:
-                    # 元のファイル名をセッションステートに保存
-                    st.session_state['original_filename'] = uploaded_file.name
-                    with st.spinner('ファイルを処理中...'):
-                        # 新しい統一関数でファイルを解析
-                        coords, z_values, err = parse_coordinate_file(uploaded_file)
-@ -395,11 +423,14 @@ else:
-                        st.success(f"✅ {len(z_values)}個の座標（Z座標含む）を読み込みました。「ジオイド高結果Excel出力」ページで利用できます。")
-                else:
-                    st.warning("⚠️ ファイルが選択されていません。")
+    if st.button('変換実行', type="primary"):
+        coordinates_to_convert = []
+        # 変換実行時にファイル名をリセット
+        st.session_state['original_filename'] = None
+
+        if input_method == "ファイルアップロード":
+            if uploaded_file:
+                # 元のファイル名をセッションステートに保存
+                st.session_state['original_filename'] = uploaded_file.name
+                with st.spinner('ファイルを処理中...'):
+                    # 新しい統一関数でファイルを解析
+                    coords, z_values, err = parse_coordinate_file(uploaded_file)
+
+                    st.success(f"✅ {len(z_values)}個の座標（Z座標含む）を読み込みました。「ジオイド高結果Excel出力」ページで利用できます。")
             else:
-            else: # テキスト入力の場合
-                coordinates_to_convert = parse_coordinate_text(coordinate_input_text)
+                st.warning("⚠️ ファイルが選択されていません。")
+        else: # テキスト入力の場合
+            coordinates_to_convert = parse_coordinate_text(coordinate_input_text)
+            # テキスト入力の場合もZ座標を抽出して保存
+            z_values_text = [c.get('z', 0.0) for c in coordinates_to_convert]
+            st.session_state['z_values_for_geoid'] = z_values_text
+            if coordinates_to_convert:
                 # テキスト入力の場合もZ座標を抽出して保存
                 z_values_text = [c.get('z', 0.0) for c in coordinates_to_convert]
                 st.session_state['z_values_for_geoid'] = z_values_text
-                if coordinates_to_convert:
-                    # テキスト入力の場合もZ座標を抽出して保存
-                    z_values_text = [c.get('z', 0.0) for c in coordinates_to_convert]
-                    st.session_state['z_values_for_geoid'] = z_values_text
-                    # テキスト入力用のデフォルトファイル名を設定
-                    st.session_state['original_filename'] = "text_input.xlsx"
+                # テキスト入力用のデフォルトファイル名を設定
+                st.session_state['original_filename'] = "text_input.xlsx"
 
-            if not coordinates_to_convert:
-                st.warning("⚠️ 変換対象の座標が見つかりませんでした。")
+        if not coordinates_to_convert:
+            st.warning("⚠️ 変換対象の座標が見つかりませんでした。")
