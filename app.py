@@ -127,7 +127,7 @@ def _extract_float_from_string(s):
 def parse_coordinate_file(uploaded_file):
     """
     アップロードされたファイル（Excel/CSV）を解析し、座標データとZ値のリストを返す統一関数。
-    セル内の文字列からX,Y,Zのラベルと数値を柔軟に抽出し、座標を認識する。
+    X,Yのペアを基準にデータを読み込み、複数のブロックに対応する。
     戻り値: (all_coords, all_z_values, error_message)
     """
     if uploaded_file is None:
@@ -144,6 +144,78 @@ def parse_coordinate_file(uploaded_file):
             df = pd.read_excel(uploaded_file, header=None, engine='openpyxl', dtype=str)
         else:
             return None, None, "サポートされていないファイル形式です。"
+
+        all_coords = []
+        all_z_values = []
+        df_str = df.astype(str)
+
+        # Find all X, Y, Z header locations
+        x_locs, y_locs, z_locs = [], [], []
+        for r in range(df.shape[0]):
+            for c in range(df.shape[1]):
+                val = str(df_str.iat[r, c]).lower()
+                if not val or val == 'nan': continue
+                if re.search(r'x|easting', val): x_locs.append((r, c))
+                elif re.search(r'y|northing', val): y_locs.append((r, c))
+                elif re.search(r'z|標高|height', val): z_locs.append((r, c))
+
+        if not x_locs or not y_locs:
+            return None, None, "XおよびYのヘッダーが見つかりませんでした。"
+
+        used_headers = set()
+        x_locs.sort() # Process headers in a predictable order
+
+        for r_x, c_x in x_locs:
+            if (r_x, c_x) in used_headers: continue
+            
+            y_candidates = [loc for loc in y_locs if loc[0] == r_x and loc not in used_headers]
+            if not y_candidates: continue
+            y_match = y_candidates[0]
+
+            z_candidates = [loc for loc in z_locs if loc[0] == r_x and loc not in used_headers]
+            z_match = z_candidates[0] if z_candidates else None
+            
+            header_row = r_x
+            x_col, y_col = c_x, y_match[1]
+            z_col = z_match[1] if z_match else None
+            
+            used_headers.add((r_x, c_x))
+            used_headers.add(y_match)
+            if z_match: used_headers.add(z_match)
+
+            for r_data in range(header_row + 1, df.shape[0]):
+                try:
+                    easting_str = str(df.iat[r_data, x_col]).strip()
+                    northing_str = str(df.iat[r_data, y_col]).strip()
+
+                    if not easting_str and not northing_str: break
+                    if not easting_str or not northing_str: continue
+
+                    easting = _extract_float_from_string(easting_str)
+                    northing = _extract_float_from_string(northing_str)
+
+                    if easting is None or northing is None: continue
+
+                    z = 0.0
+                    if z_col is not None:
+                        z_str = str(df.iat[r_data, z_col]).strip()
+                        z_val = _extract_float_from_string(z_str)
+                        if z_val is not None:
+                            z = z_val
+
+                    all_coords.append({'easting': easting, 'northing': northing, 'z': z})
+                    all_z_values.append(z)
+
+                except (ValueError, TypeError, IndexError):
+                    break
+        
+        if not all_coords:
+            return None, None, "有効な座標データが見つかりませんでした。"
+
+        all_z_values = [c['z'] for c in final_coords]
+        return final_coords, all_z_values, None
+    except Exception as e:
+        return None, None, f"ファイル解析エラー: {e}"
 
 
 
