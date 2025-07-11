@@ -235,39 +235,40 @@ def extract_z_from_file(uploaded_file):
         else:
             return None, "サポートされていないファイル形式です。"
 
-        z_loc = None
-        header_row = -1
-
-        # Zヘッダーの場所を探す
+        all_z_values = []
+        df_str = df.astype(str)
+        
+        # Find all Z header locations
+        z_locs = []
         for r in range(df.shape[0]):
             for c in range(df.shape[1]):
-                val = str(df.iat[r, c]).lower()
+                val = str(df_str.iat[r, c]).lower()
                 if re.search(r'z|標高|height', val):
-                    z_loc = (r, c)
-                    header_row = r
-                    break
-            if z_loc:
-                break
+                    z_locs.append((r, c))
 
-        if not z_loc:
+        if not z_locs:
             return None, "Z座標、標高、またはheightというヘッダーが見つかりませんでした。"
 
-        z_col = z_loc[1]
-        z_values = []
-        for r_data in range(header_row + 1, df.shape[0]):
-            try:
-                z_str = str(df.iat[r_data, z_col]).strip()
-                if z_str and z_str.lower() != 'nan':
-                    z_values.append(float(z_str))
-                else:
-                    # Zが空欄やnanの場合は0.0を追加するか、あるいはスキップするかを選択
-                    # ここでは0.0を追加する
-                    z_values.append(0.0)
-            except (ValueError, TypeError, IndexError):
-                # データが終わったと判断
-                break
+        # Process each found Z header
+        for header_row, z_col in z_locs:
+            block_z_values = []
+            for r_data in range(header_row + 1, df.shape[0]):
+                try:
+                    z_str = str(df.iat[r_data, z_col]).strip()
+                    if z_str and z_str.lower() != 'nan':
+                        block_z_values.append(float(z_str))
+                    else:
+                        # End of data block
+                        break
+                except (ValueError, TypeError, IndexError):
+                    # End of data block
+                    break
+            all_z_values.extend(block_z_values)
         
-        return z_values, None
+        if not all_z_values:
+             return None, "Zヘッダーの下に有効な数値データが見つかりませんでした。"
+
+        return all_z_values, None
 
     except Exception as e:
         return None, f"ファイル解析エラー: {e}"
