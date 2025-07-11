@@ -265,8 +265,7 @@ else:
         uploaded_file = None
 
         if input_method == "ファイルアップロード":
-            st.info("Excel (.xlsx) または CSV (.csv) ファイルをアップロードしてください。
-")
+            st.info("Excel (.xlsx) または CSV (.csv) ファイルをアップロードしてください。")
             uploaded_file = st.file_uploader("ファイルを選択", type=['xlsx', 'csv'])
         else:
             coordinate_input_text = st.text_area(
