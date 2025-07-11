@@ -236,6 +236,10 @@ def parse_coordinate_file(uploaded_file):
                     elif re.search(r'(?:[Zz]|標高|height)', cell_content, re.IGNORECASE):
                         all_z_data.append({'value': num_val, 'row': r, 'col': c})
 
+        # Now, try to group these into points.
+        # Heuristic: Look for X, Y, Z that are close to each other, prioritizing column-wise grouping
+        # (e.g., X in A1, Y in A2, Z in A3 forms one point)
+
         final_coords = []
         used_y_indices = set()
         used_z_indices = set()
@@ -252,42 +256,30 @@ def parse_coordinate_file(uploaded_file):
             found_y = None
             found_z = None
 
-            # Try to find Y and Z in a vertical block (X, Y, Z in consecutive rows of the same column)
-            # Search for Y directly below X
+            # Try to find Y and Z in the same row or same column, prioritizing same row
+            # Search for Y
             for i, y_item in enumerate(all_y_data):
                 if i in used_y_indices: continue
-                if y_item['col'] == x_col and y_item['row'] == x_row + 1: 
+                if y_item['row'] == x_row: # Same row
+                    found_y = y_item
+                    used_y_indices.add(i)
+                    break
+                elif y_item['col'] == x_col: # Same column
                     found_y = y_item
                     used_y_indices.add(i)
                     break
             
-            # If Y found vertically, search for Z directly below Y
-            if found_y:
-                for i, z_item in enumerate(all_z_data):
-                    if i in used_z_indices: continue
-                    if z_item['col'] == x_col and z_item['row'] == x_row + 2: 
-                        found_z = z_item
-                        used_z_indices.add(i)
-                        break
-
-            # If not found vertically, try horizontally (X, Y, Z in consecutive columns of the same row)
-            if not found_y: # Only try horizontal if vertical wasn't found
-                # Search for Y directly to the right of X
-                for i, y_item in enumerate(all_y_data):
-                    if i in used_y_indices: continue
-                    if y_item['row'] == x_row and y_item['col'] == x_col + 1: 
-                        found_y = y_item
-                        used_y_indices.add(i)
-                        break
-                
-                # If Y found horizontally, search for Z directly to the right of Y
-                if found_y:
-                    for i, z_item in enumerate(all_z_data):
-                        if i in used_z_indices: continue
-                        if z_item['row'] == x_row and z_item['col'] == x_col + 2: 
-                            found_z = z_item
-                            used_z_indices.add(i)
-                            break
+            # Search for Z
+            for i, z_item in enumerate(all_z_data):
+                if i in used_z_indices: continue
+                if z_item['row'] == x_row: # Same row
+                    found_z = z_item
+                    used_z_indices.add(i)
+                    break
+                elif z_item['col'] == x_col: # Same column
+                    found_z = z_item
+                    used_z_indices.add(i)
+                    break
 
             if found_y: # Y is mandatory for a coordinate point
                 northing = found_y['value']
