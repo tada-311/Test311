@@ -441,6 +441,7 @@ def main_app():
                     file_name="geoid.in",
                     mime="text/plain"
                 )
+            st.markdown("ジオイド高計算は [国土地理院 ジオイド高計算](https://vldb.gsi.go.jp/sokuchi/surveycalc/geoid/calcgh/calcframe.html) をご利用ください。")
             
             # Z座標をセッションに保存
             st.session_state['z_values_for_geoid'] = z_values_from_conversion
