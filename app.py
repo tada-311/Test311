@@ -276,34 +276,33 @@ def extract_z_from_file(uploaded_file):
 # --- ジオイド高結果Excel出力ページ --- 
 def geoid_excel_output_page():
     st.header("ジオイド高結果Excel出力")
-    st.info("**ステップ1:** Z座標（標高）を含む元の座標ファイルをアップロードし、**ステップ2:** 国土地理院のジオイド高計算結果 (.out) ファイルをアップロードしてください。")
 
-    # --- ステップ1: 元の座標ファイルからZ座標を読み込む ---
-    st.subheader("ステップ1: 元の座標ファイル (Z座標) のアップロード")
-    original_coord_file = st.file_uploader("Z座標を含むExcelまたはCSVファイルを選択", type=['xlsx', 'csv', 'xls'], key="z_file_uploader")
+    # --- Z座標の確認 ---
+    z_values = st.session_state.get('z_values_for_geoid')
 
-    if original_coord_file:
-        z_values, err = extract_z_from_file(original_coord_file)
-        if err:
-            st.error(f"⚠️ {err}")
-            st.session_state['z_values_for_geoid'] = None
+    if z_values:
+        st.success(f"✅ 「座標変換」ページから {len(z_values)}個のZ座標を読み込み済みです。")
+    else:
+        st.info("**ステップ1:** Z座標（標高）を含む元の座標ファイルをアップロードしてください。")
+        original_coord_file = st.file_uploader("Z座標を含むExcelまたはCSVファイルを選択", type=['xlsx', 'csv', 'xls'], key="z_file_uploader_fallback")
+        if original_coord_file:
+            z_values, err = extract_z_from_file(original_coord_file)
+            if err:
+                st.error(f"⚠️ {err}")
+                st.session_state['z_values_for_geoid'] = None
+                return # エラーがあればここで処理を中断
+            else:
+                st.session_state['z_values_for_geoid'] = z_values
+                st.rerun() # Z値を読み込んだらページを再実行して表示を更新
         else:
-            st.success(f"✅ {len(z_values)}個のZ座標を正常に読み込みました。")
-            st.session_state['z_values_for_geoid'] = z_values
+            return # ファイルがアップロードされるまで待機
 
-    # --- ステップ2: .out ファイルを処理してExcelを生成 ---
+    # --- .out ファイルのアップロードと処理 ---
     st.subheader("ステップ2: ジオイド高結果 (.out) のアップロードとExcel生成")
     uploaded_out_file = st.file_uploader("ジオイド高結果ファイル (.out) を選択", type=['out'], key="out_file_uploader")
 
     if uploaded_out_file:
-        # ステップ1でZ座標が読み込まれているか確認
-        if not st.session_state.get('z_values_for_geoid'):
-            st.warning("⚠️ 先にステップ1でZ座標を含むファイルをアップロードしてください。")
-            return
-
         try:
-            z_values = st.session_state['z_values_for_geoid']
-            
             # .out ファイルの処理
             content_bytes = uploaded_out_file.getvalue()
             try:
@@ -400,7 +399,18 @@ else:
 
         if input_method == "ファイルアップロード":
             st.info("Excel (.xlsx) または CSV (.csv) ファイルをアップロードしてください。")
-            uploaded_file = st.file_uploader("ファイルを選択", type=['xlsx', 'csv'])
+            uploaded_file = st.file_uploader("ファイルを選択", type=['xlsx', 'csv', 'xls'])
+            # ファイルがアップロードされた瞬間にZ座標を抽出してsession_stateに保存
+            if uploaded_file:
+                z_values, err = extract_z_from_file(uploaded_file)
+                if err:
+                    st.warning(f"Z座標の読み込みに失敗: {err}")
+                    st.session_state['z_values_for_geoid'] = None
+                else:
+                    st.success(f"✅ Z座標を{len(z_values)}個読み込みました。「ジオイド高結果Excel出力」ページで利用できます。")
+                    st.session_state['z_values_for_geoid'] = z_values
+                # アップロードされたファイルを再利用するためにリセットしない
+                # uploaded_file.seek(0) # 必要に応じて
         else:
             coordinate_input_text = st.text_area(
                 '**X (Northing), Y (Easting), Z (標高)** の順で座標を入力してください。\n\n'
