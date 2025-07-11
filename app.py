@@ -42,6 +42,38 @@ def decimal_to_dms_string(decimal_degrees):
     # 例: 370856.12340
     return f"{degrees}{minutes_str}{seconds_str}"
 
+def dms_string_to_decimal(dms_string):
+    """度分秒形式の文字列（例: 333437.14801）を10進数の度に変換"""
+    try:
+        dms_string = str(dms_string).strip()
+        if '.' not in dms_string:
+            dms_string += '.0'
+        
+        parts = dms_string.split('.')
+        integer_part = parts[0]
+        decimal_part = parts[1]
+
+        # 整数部が6文字未満（例: 333437 -> DDMMSS）の場合はエラーとするか、適切に処理する必要がある
+        if len(integer_part) < 6:
+            return None
+
+        # 秒 (SS.sssss)
+        seconds_str = integer_part[-2:] + '.' + decimal_part
+        seconds = float(seconds_str)
+        
+        # 分 (MM)
+        minutes_str = integer_part[-4:-2]
+        minutes = int(minutes_str)
+        
+        # 度 (DD or DDD)
+        degrees_str = integer_part[:-4]
+        degrees = int(degrees_str)
+        
+        decimal_degrees = degrees + minutes / 60 + seconds / 3600
+        return decimal_degrees
+    except (ValueError, IndexError):
+        return None
+
 # --- 座標変換ヘルパー ---
 def auto_detect_zone(easting, northing):
     candidates = []
@@ -92,40 +124,68 @@ def parse_coordinate_file(uploaded_file):
         all_coords = []
         df_str = df.astype(str)
 
-        x_locs, y_locs = [], []
-
+        # X, Y, Zヘッダーの場所を探す
+        x_locs, y_locs, z_locs = [], [], []
         for r in range(df.shape[0]):
             for c in range(df.shape[1]):
-                val = df_str.iat[r, c].lower()
+                val = str(df_str.iat[r, c]).lower()
                 if not val or val == 'nan': continue
                 if re.search(r'x|easting', val): x_locs.append((r, c))
                 elif re.search(r'y|northing', val): y_locs.append((r, c))
+                elif re.search(r'z|標高|height', val): z_locs.append((r, c))
 
         used = set()
+        header_info = "X, Yのヘッダーが見つかりませんでした。"
 
         for r_x, c_x in x_locs:
             if (r_x, c_x) in used: continue
+            
+            # 同じ行にあるYを探す
             y_match = next(((r_y, c_y) for r_y, c_y in y_locs if r_y == r_x and (r_y, c_y) not in used), None)
-
+            
             if y_match:
+                # 同じ行にあるZを探す (オプション)
+                z_match = next(((r_z, c_z) for r_z, c_z in z_locs if r_z == r_x and (r_z, c_z) not in used), None)
+                
                 header_row = r_x
                 x_col, y_col = c_x, y_match[1]
+                z_col = z_match[1] if z_match else None
+                
                 block_coords = []
                 for r_data in range(header_row + 1, df.shape[0]):
                     try:
-                        easting = float(df.iat[r_data, x_col])
-                        northing = float(df.iat[r_data, y_col])
-                        block_coords.append({'easting': easting, 'northing': northing})
-                    except:
-                        # データが数値でない場合はブロックの終わりと判断
+                        easting_str = str(df.iat[r_data, x_col]).strip()
+                        northing_str = str(df.iat[r_data, y_col]).strip()
+
+                        # X, Yが空欄や数値でない場合はデータの終わりとみなす
+                        if not easting_str or not northing_str: break
+                        easting = float(easting_str)
+                        northing = float(northing_str)
+
+                        z = 0.0
+                        if z_col is not None:
+                            try:
+                                z_str = str(df.iat[r_data, z_col]).strip()
+                                if z_str: # Zが空欄でない場合のみ変換
+                                    z = float(z_str)
+                            except (ValueError, TypeError):
+                                z = 0.0 # Zが数値でない場合は0.0とする
+
+                        block_coords.append({'easting': easting, 'northing': northing, 'z': z})
+                    except (ValueError, TypeError, IndexError):
+                        # データが数値でない、または範囲外の場合はブロックの終わりと判断
                         break
+                
                 if block_coords:
                     all_coords.extend(block_coords)
                     used.update({(r_x, c_x), y_match})
+                    if z_match:
+                        used.update({z_match})
+                    header_info = None # 正常に座標が見つかった
 
-        return all_coords, None if all_coords else "X, Yのヘッダーが見つかりませんでした。"
+        return all_coords, header_info
     except Exception as e:
-        return None, f"エラー: {e}"
+        return None, f"ファイル解析エラー: {e}"
 
 def parse_coordinate_text(input_string):
     coordinates = []
@@ -167,67 +227,67 @@ def geoid_excel_output_page():
 
     if uploaded_out_file:
         try:
-            # .out ファイルの内容を読み込み
+            # .out ファイルの内容を読み込み (UTF-8/Shift-JIS自動判別)
             content_bytes = uploaded_out_file.getvalue()
             try:
-                # まずUTF-8でデコードを試みる
-                content = content_bytes.decode('utf-8-sig') # BOM付きUTF-8に対応
+                content = content_bytes.decode('utf-8-sig')
             except UnicodeDecodeError:
-                # UTF-8で失敗した場合、Shift-JISでデコードを試みる
                 content = content_bytes.decode('shift-jis')
+            
             lines = content.splitlines()
 
-            # ヘッダー行をスキップし、データ行を解析
             data_rows = []
             for line in lines:
                 if not line.strip() or line.strip().startswith('#') or line.strip().startswith('-'):
-                    continue # コメント行や区切り線をスキップ
+                    continue
                 
-                parts = line.strip().split() # 半角空白で分割
-                if len(parts) >= 5: # 緯度, 経度, ジオイド高, 基準面補正量, ジオイド高+基準面補正量
+                parts = line.strip().split()
+                if len(parts) >= 5:
                     try:
                         lat_dms = parts[0]
                         lon_dms = parts[1]
-                        geoid_height_plus_correction = float(parts[4]) # ジオイド高+基準面補正量
-                        data_rows.append({
-                            "緯度(dms)": lat_dms,
-                            "経度(dms)": lon_dms,
-                            "ジオイド高+基準面補正量(m)": geoid_height_plus_correction
-                        })
-                    except ValueError:
+                        geoid_height_plus_correction = float(parts[4])
+                        
+                        # DMSを10進数に変換
+                        lat_decimal = dms_string_to_decimal(lat_dms)
+                        lon_decimal = dms_string_to_decimal(lon_dms)
+
+                        if lat_decimal is not None and lon_decimal is not None:
+                            data_rows.append({
+                                "緯度(10進)": lat_decimal,
+                                "経度(10進)": lon_decimal,
+                                "ジオイド高+基準面補正量(m)": geoid_height_plus_correction
+                            })
+                        else:
+                            st.warning(f"⚠️ DMSから10進数への変換に失敗しました: {line}")
+
+                    except (ValueError, IndexError):
                         st.warning(f"⚠️ データ行の解析に失敗しました: {line}")
                         continue
             
             if not data_rows:
-                st.warning("⚠️ .out ファイルから有効なデータが見つかりませんでした。ファイル形式を確認してください。")
+                st.warning("⚠️ .out ファイルから有効なデータが見つかりませんでした。")
                 return
 
-            # 座標変換ページで保存された元のZ座標を取得
             original_z_coords = st.session_state.get('converted_coords_for_excel', [])
 
             output_data = []
             for i, row_data in enumerate(data_rows):
-                lat_dms = row_data["緯度(dms)"]
-                lon_dms = row_data["経度(dms)"]
-                geoid_plus_correction = row_data["ジオイド高+基準面補正量(m)"]
-
-                # 元のZ座標を取得 (順序が一致している前提)
                 original_z = 0.0
                 if i < len(original_z_coords) and 'z' in original_z_coords[i]['input']:
                     original_z = original_z_coords[i]['input']['z']
                 
-                ellipsoidal_height = original_z + geoid_plus_correction
+                ellipsoidal_height = original_z + row_data["ジオイド高+基準面補正量(m)"]
 
                 output_data.append({
-                    "緯度(dms)": lat_dms,
-                    "経度(dms)": lon_dms,
+                    "緯度(10進)": f"{row_data['緯度(10進)']:.10f}",
+                    "経度(10進)": f"{row_data['経度(10進)']:.10f}",
                     "楕円体高(m)": f"{ellipsoidal_height:.4f}"
                 })
 
             output_df = pd.DataFrame(output_data)
             st.dataframe(output_df, use_container_width=True)
 
-            # Excelダウンロードボタン
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 output_df.to_excel(writer, index=False, sheet_name='ジオイド高結果')
@@ -236,13 +296,12 @@ def geoid_excel_output_page():
             st.download_button(
                 label="Excelファイル (.xlsx) をダウンロード",
                 data=processed_data,
-                file_name="geoid_results.xlsx",
+                file_name="geoid_results_decimal.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
         except Exception as e:
             st.error(f"⚠️ ファイルの処理中にエラーが発生しました: {e}")
-            st.info("ファイル形式が正しいか、またはShift-JISエンコードであることを確認してください。")
 
 # --- Streamlit App --- 
 st.title("座標変換ツール (JGD2011平面直角座標系 → WGS84緯度経度)")
