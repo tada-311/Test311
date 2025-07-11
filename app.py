@@ -376,6 +376,7 @@ def main_app():
         display_mode = st.radio("表示モード:", ("要約表示", "詳細表示"), horizontal=True)
 
     if st.button('変換実行', type="primary"):
+        st.markdown("ジオイド高計算は [国土地理院 ジオイド高計算](https://vldb.gsi.go.jp/sokuchi/surveycalc/geoid/calcgh/calcframe.html) をご利用ください。")
         coordinates_to_convert = []
         z_values_from_conversion = []
 
@@ -460,7 +461,7 @@ def main_app():
                     else:
                         summary_data.append({"点": res["id"], "緯度": "変換失敗", "経度": "", "系": "", "元のZ": ""})
                 st.dataframe(summary_data, use_container_width=True)
-                st.caption("* が付いている系番号は自動判別されたものです。")
+                st.caption("\* が付いている系番号は自動判別されたものです。")
 
             # ジオイド高計算用ファイル出力ボタン
             geoid_in_content = "# 緯度(dms)   経度(dms)\n"
@@ -482,7 +483,6 @@ def main_app():
             # Z座標と変換結果をセッションに保存
             st.session_state['z_values_for_geoid'] = z_values_from_conversion
             st.session_state['conversion_results_for_geoid'] = results_data
-            st.session_state['conversion_executed'] = True # 変換成功時にフラグを設定
 page_selection = st.sidebar.radio("ページ選択", ["X,Y座標の変換", "楕円体高計算と座標のExcel出力"])
 
 if page_selection == "X,Y座標の変換":
