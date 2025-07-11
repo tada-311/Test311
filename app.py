@@ -296,8 +296,8 @@ def geoid_excel_output_page():
                     geoid_h = geoid_heights[i]
                     ellipsoid_h = original_z + geoid_h
                     output_data.append({
-                        "緯度": res["result"]["lat"],
-                        "経度": res["result"]["lon"],
+                        "緯度": f"{res["result"]["lat"]}",
+                        "経度": f"{res["result"]["lon"]}",
                         "楕円体高": ellipsoid_h
                     })
                 
