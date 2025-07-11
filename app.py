@@ -481,6 +481,7 @@ def main_app():
             st.session_state['z_values_for_geoid'] = z_values_from_conversion
             st.session_state['conversion_results_for_geoid'] = results_data
 page_selection = st.sidebar.radio("ページ選択", ["X,Y座標の変換", "楕円体高計算と座標のExcel出力"])
+st.sidebar.markdown("ジオイド高計算は [国土地理院 ジオイド高計算](https://vldb.gsi.go.jp/sokuchi/surveycalc/geoid/calcgh/calcframe.html) をご利用ください。")
 
 if page_selection == "X,Y座標の変換":
     st.title("座標変換ツール (JGD2011平面直角座標系 → WGS84緯度経度)")
