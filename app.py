@@ -483,7 +483,7 @@ def main_app():
             st.session_state['conversion_results_for_geoid'] = results_data
 
 # --- Streamlit アプリケーションのメインエントリポイント ---
-page_selection = st.sidebar.radio("ページ選択", ["座標変換", "ジオイド高結果Excel出力"])
+page_selection = st.sidebar.radio("ページ選択", ["X,Y座標の変換", "楕円体高計算と座標のExcel出力"])
 
 if page_selection == "座標変換":
     st.title("座標変換ツール (JGD2011平面直角座標系 → WGS84緯度経度)")
