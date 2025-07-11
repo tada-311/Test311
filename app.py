@@ -127,7 +127,7 @@ def _extract_float_from_string(s):
 def parse_coordinate_file(uploaded_file):
     """
     アップロードされたファイル（Excel/CSV）を解析し、座標データとZ値のリストを返す統一関数。
-    X,Yのペアを基準にデータを読み込み、複数のブロックに対応する。
+    セル内の文字列からX,Y,Zのラベルと数値を柔軟に抽出し、座標を認識する。
     戻り値: (all_coords, all_z_values, error_message)
     """
     if uploaded_file is None:
@@ -145,74 +145,97 @@ def parse_coordinate_file(uploaded_file):
         else:
             return None, None, "サポートされていないファイル形式です。"
 
-        all_coords = []
-        all_z_values = []
-        df_str = df.astype(str)
+        all_x_data = [] # List of {'value': float, 'row': int, 'col': int}
+        all_y_data = []
+        all_z_data = []
 
-        # Find all X, Y, Z header locations
-        x_locs, y_locs, z_locs = [], [], []
+        # Scan all cells to find X, Y, Z values
         for r in range(df.shape[0]):
             for c in range(df.shape[1]):
-                val = str(df_str.iat[r, c]).lower()
-                if not val or val == 'nan': continue
-                if re.search(r'x|easting', val): x_locs.append((r, c))
-                elif re.search(r'y|northing', val): y_locs.append((r, c))
-                elif re.search(r'z|標高|height', val): z_locs.append((r, c))
+                cell_content = str(df.iat[r, c]).strip() # Keep original case for regex matching
 
-        if not x_locs or not y_locs:
-            return None, None, "XおよびYのヘッダーが見つかりませんでした。"
+                # Regex to capture the number after X, Y, Z, or 標高/height, ignoring units
+                # Group 1 captures the number part
+                x_match = re.search(r'[Xx]\s*=?\s*([-+]?\d*\.?\d+)', cell_content)
+                y_match = re.search(r'[Yy]\s*=?\s*([-+]?\d*\.?\d+)', cell_content)
+                z_match = re.search(r'(?:[Zz]|標高|height)\s*=?\s*([-+]?\d*\.?\d+)', cell_content)
 
-        used_headers = set()
-        x_locs.sort() # Process headers in a predictable order
+                if x_match:
+                    try:
+                        val = float(x_match.group(1))
+                        all_x_data.append({'value': val, 'row': r, 'col': c})
+                    except ValueError: pass
+                elif y_match:
+                    try:
+                        val = float(y_match.group(1))
+                        all_y_data.append({'value': val, 'row': r, 'col': c})
+                    except ValueError: pass
+                elif z_match:
+                    try:
+                        val = float(z_match.group(1))
+                        all_z_data.append({'value': val, 'row': r, 'col': c})
+                    except ValueError: pass
 
-        for r_x, c_x in x_locs:
-            if (r_x, c_x) in used_headers: continue
-            
-            y_candidates = [loc for loc in y_locs if loc[0] == r_x and loc not in used_headers]
-            if not y_candidates: continue
-            y_match = y_candidates[0]
+        # Now, try to group these into points.
+        # Heuristic: Look for X, Y, Z that are close to each other, prioritizing column-wise grouping
+        # (e.g., X in A1, Y in A2, Z in A3 forms one point)
 
-            z_candidates = [loc for loc in z_locs if loc[0] == r_x and loc not in used_headers]
-            z_match = z_candidates[0] if z_candidates else None
-            
-            header_row = r_x
-            x_col, y_col = c_x, y_match[1]
-            z_col = z_match[1] if z_match else None
-            
-            used_headers.add((r_x, c_x))
-            used_headers.add(y_match)
-            if z_match: used_headers.add(z_match)
+        final_coords = []
+        used_y_indices = set()
+        used_z_indices = set()
 
-            for r_data in range(header_row + 1, df.shape[0]):
-                try:
-                    easting_str = str(df.iat[r_data, x_col]).strip()
-                    northing_str = str(df.iat[r_data, y_col]).strip()
+        # Sort X, Y, Z data to process in a consistent order (e.g., top-left to bottom-right)
+        all_x_data.sort(key=lambda item: (item['col'], item['row']))
+        all_y_data.sort(key=lambda item: (item['col'], item['row']))
+        all_z_data.sort(key=lambda item: (item['col'], item['row']))
 
-                    if not easting_str and not northing_str: break
-                    if not easting_str or not northing_str: continue
+        for x_item in all_x_data:
+            easting = x_item['value']
+            x_row, x_col = x_item['row'], x_item['col']
 
-                    easting = _extract_float_from_string(easting_str)
-                    northing = _extract_float_from_string(northing_str)
-
-                    if easting is None or northing is None: continue
-
-                    z = 0.0
-                    if z_col is not None:
-                        z_str = str(df.iat[r_data, z_col]).strip()
-                        z_val = _extract_float_from_string(z_str)
-                        if z_val is not None:
-                            z = z_val
-
-                    all_coords.append({'easting': easting, 'northing': northing, 'z': z})
-                    all_z_values.append(z)
-
-                except (ValueError, TypeError, IndexError):
+            found_y = None
+            # Look for Y in the same column, or adjacent column, and close rows
+            for i, y_item in enumerate(all_y_data):
+                if i in used_y_indices: continue
+                if y_item['col'] == x_col and (y_item['row'] == x_row + 1 or y_item['row'] == x_row - 1): # Same col, adjacent row
+                    found_y = y_item
+                    used_y_indices.add(i)
                     break
-        
-        if not all_coords:
+                elif y_item['row'] == x_row and (y_item['col'] == x_col + 1 or y_item['col'] == x_col - 1): # Same row, adjacent col
+                    found_y = y_item
+                    used_y_indices.add(i)
+                    break
+
+            if found_y:
+                northing = found_y['value']
+                y_row, y_col = found_y['row'], found_y['col']
+
+                found_z = None
+                # Look for Z in the same column, or adjacent column, and close rows
+                for i, z_item in enumerate(all_z_data):
+                    if i in used_z_indices: continue
+                    if z_item['col'] == x_col and (z_item['row'] == x_row + 2 or z_item['row'] == x_row + 1 or z_item['row'] == x_row - 1 or z_item['row'] == x_row - 2): # Same col, close row
+                        found_z = z_item
+                        used_z_indices.add(i)
+                        break
+                    elif z_item['row'] == x_row and (z_item['col'] == x_col + 2 or z_item['col'] == x_col + 1 or z_item['col'] == x_col - 1 or z_item['col'] == x_col - 2): # Same row, close col
+                        found_z = z_item
+                        used_z_indices.add(i)
+                        break
+                
+                z_val = found_z['value'] if found_z else 0.0
+
+                final_coords.append({
+                    'easting': easting,
+                    'northing': northing,
+                    'z': z_val
+                })
+
+        if not final_coords:
             return None, None, "有効な座標データが見つかりませんでした。"
 
-        return all_coords, all_z_values, None
+        all_z_values = [c['z'] for c in final_coords]
+        return final_coords, all_z_values, None
     except Exception as e:
         return None, None, f"ファイル解析エラー: {e}"
 
