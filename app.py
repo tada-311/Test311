@@ -106,8 +106,13 @@ def auto_detect_zone(easting, northing):
 
 # --- ファイル解析関数 ---
 def parse_coordinate_file(uploaded_file):
+    """
+    アップロードされたファイル（Excel/CSV）を解析し、座標データとZ値のリストを返す統一関数。
+    X,Yのペアを基準にデータを読み込み、複数のブロックに対応する。
+    戻り値: (all_coords, all_z_values, error_message)
+    """
     if uploaded_file is None:
-        return None, "ファイルがアップロードされていません。"
+        return None, None, "ファイルがアップロードされていません。"
     try:
         ext = os.path.splitext(uploaded_file.name)[1].lower()
         if ext == '.csv':
@@ -119,12 +124,13 @@ def parse_coordinate_file(uploaded_file):
         elif ext in ['.xlsx', '.xls']:
             df = pd.read_excel(uploaded_file, header=None, engine='openpyxl', dtype=str)
         else:
-            return None, "サポートされていないファイル形式です。"
+            return None, None, "サポートされていないファイル形式です。"
 
         all_coords = []
+        all_z_values = []
         df_str = df.astype(str)
 
-        # X, Y, Zヘッダーの場所を探す
+        # Find all X, Y, Z header locations
         x_locs, y_locs, z_locs = [], [], []
         for r in range(df.shape[0]):
             for c in range(df.shape[1]):
@@ -134,58 +140,62 @@ def parse_coordinate_file(uploaded_file):
                 elif re.search(r'y|northing', val): y_locs.append((r, c))
                 elif re.search(r'z|標高|height', val): z_locs.append((r, c))
 
-        used = set()
-        header_info = "X, Yのヘッダーが見つかりませんでした。"
+        if not x_locs or not y_locs:
+            return None, None, "XおよびYのヘッダーが見つかりませんでした。"
+
+        used_headers = set()
+        x_locs.sort() # Process headers in a predictable order
 
         for r_x, c_x in x_locs:
-            if (r_x, c_x) in used: continue
+            if (r_x, c_x) in used_headers: continue
             
-            # 同じ行にあるYを探す
-            y_match = next(((r_y, c_y) for r_y, c_y in y_locs if r_y == r_x and (r_y, c_y) not in used), None)
+            y_candidates = [loc for loc in y_locs if loc[0] == r_x and loc not in used_headers]
+            if not y_candidates: continue
+            y_match = y_candidates[0]
+
+            z_candidates = [loc for loc in z_locs if loc[0] == r_x and loc not in used_headers]
+            z_match = z_candidates[0] if z_candidates else None
             
-            if y_match:
-                # 同じ行にあるZを探す (オプション)
-                z_match = next(((r_z, c_z) for r_z, c_z in z_locs if r_z == r_x and (r_z, c_z) not in used), None)
-                
-                header_row = r_x
-                x_col, y_col = c_x, y_match[1]
-                z_col = z_match[1] if z_match else None
-                
-                block_coords = []
-                for r_data in range(header_row + 1, df.shape[0]):
-                    try:
-                        easting_str = str(df.iat[r_data, x_col]).strip()
-                        northing_str = str(df.iat[r_data, y_col]).strip()
+            header_row = r_x
+            x_col, y_col = c_x, y_match[1]
+            z_col = z_match[1] if z_match else None
+            
+            used_headers.add((r_x, c_x))
+            used_headers.add(y_match)
+            if z_match: used_headers.add(z_match)
 
-                        # X, Yが空欄や数値でない場合はデータの終わりとみなす
-                        if not easting_str or not northing_str: break
-                        easting = float(easting_str)
-                        northing = float(northing_str)
+            for r_data in range(header_row + 1, df.shape[0]):
+                try:
+                    easting_str = str(df.iat[r_data, x_col]).strip()
+                    northing_str = str(df.iat[r_data, y_col]).strip()
 
-                        z = 0.0
-                        if z_col is not None:
-                            try:
-                                z_str = str(df.iat[r_data, z_col]).strip()
-                                if z_str: # Zが空欄でない場合のみ変換
-                                    z = float(z_str)
-                            except (ValueError, TypeError):
-                                z = 0.0 # Zが数値でない場合は0.0とする
+                    if not easting_str and not northing_str: break
+                    if not easting_str or not northing_str: continue
 
-                        block_coords.append({'easting': easting, 'northing': northing, 'z': z})
-                    except (ValueError, TypeError, IndexError):
-                        # データが数値でない、または範囲外の場合はブロックの終わりと判断
-                        break
-                
-                if block_coords:
-                    all_coords.extend(block_coords)
-                    used.update({(r_x, c_x), y_match})
-                    if z_match:
-                        used.update({z_match})
-                    header_info = None # 正常に座標が見つかった
+                    easting = float(easting_str)
+                    northing = float(northing_str)
 
-        return all_coords, header_info
+                    z = 0.0
+                    if z_col is not None:
+                        try:
+                            z_str = str(df.iat[r_data, z_col]).strip()
+                            if z_str and z_str.lower() != 'nan':
+                                z = float(z_str)
+                        except (ValueError, TypeError):
+                            z = 0.0
+
+                    all_coords.append({'easting': easting, 'northing': northing, 'z': z})
+                    all_z_values.append(z)
+
+                except (ValueError, TypeError, IndexError):
+                    break
+        
+        if not all_coords:
+            return None, None, "有効な座標データが見つかりませんでした。"
+
+        return all_coords, all_z_values, None
     except Exception as e:
-        return None, f"ファイル解析エラー: {e}"
+        return None, None, f"ファイル解析エラー: {e}"
 
 def parse_coordinate_text(input_string):
     coordinates = []
@@ -219,59 +229,7 @@ def parse_coordinate_text(input_string):
     return coordinates
 
 # --- Z座標抽出関数 ---
-def extract_z_from_file(uploaded_file):
-    if not uploaded_file:
-        return None, "ファイルが選択されていません。"
-    try:
-        ext = os.path.splitext(uploaded_file.name)[1].lower()
-        if ext == '.csv':
-            content = uploaded_file.getvalue()
-            try:
-                df = pd.read_csv(io.StringIO(content.decode('utf-8')), header=None, dtype=str)
-            except UnicodeDecodeError:
-                df = pd.read_csv(io.StringIO(content.decode('shift-jis')), header=None, dtype=str)
-        elif ext in ['.xlsx', '.xls']:
-            df = pd.read_excel(uploaded_file, header=None, engine='openpyxl', dtype=str)
-        else:
-            return None, "サポートされていないファイル形式です。"
 
-        all_z_values = []
-        df_str = df.astype(str)
-        
-        # Find all Z header locations
-        z_locs = []
-        for r in range(df.shape[0]):
-            for c in range(df.shape[1]):
-                val = str(df_str.iat[r, c]).lower()
-                if re.search(r'z|標高|height', val):
-                    z_locs.append((r, c))
-
-        if not z_locs:
-            return None, "Z座標、標高、またはheightというヘッダーが見つかりませんでした。"
-
-        # Process each found Z header
-        for header_row, z_col in z_locs:
-            block_z_values = []
-            for r_data in range(header_row + 1, df.shape[0]):
-                try:
-                    z_str = str(df.iat[r_data, z_col]).strip()
-                    if z_str and z_str.lower() != 'nan':
-                        block_z_values.append(float(z_str))
-                    else:
-                        # End of data block
-                        break
-                except (ValueError, TypeError, IndexError):
-                    # End of data block
-                    break
-            all_z_values.extend(block_z_values)
-        
-        if not all_z_values:
-             return None, "Zヘッダーの下に有効な数値データが見つかりませんでした。"
-
-        return all_z_values, None
-
-    except Exception as e:
-        return None, f"ファイル解析エラー: {e}"
 
 
 # --- ジオイド高結果Excel出力ページ --- 
@@ -284,22 +242,22 @@ def geoid_excel_output_page():
     if z_values:
         st.success(f"✅ 「座標変換」ページから {len(z_values)}個のZ座標を読み込み済みです。")
     else:
-        st.info("**ステップ1:** Z座標（標高）を含む元の座標ファイルをアップロードしてください。")
-        original_coord_file = st.file_uploader("Z座標を含むExcelまたはCSVファイルを選択", type=['xlsx', 'csv', 'xls'], key="z_file_uploader_fallback")
-        if original_coord_file:
-            z_values, err = extract_z_from_file(original_coord_file)
+        st.warning("「座標変換」ページで座標を入力・変換すると、ここでZ座標が自動的に読み込まれます。")
+        st.info("または、ここで直接Z座標を含むファイルをアップロードすることもできます。")
+        
+        # フォールバック用のファイルアップローダー
+        fallback_file = st.file_uploader("Z座標を含むExcelまたはCSVファイルを選択", type=['xlsx', 'csv', 'xls'], key="z_file_uploader_fallback")
+        if fallback_file:
+            coords, z_values_fallback, err = parse_coordinate_file(fallback_file)
             if err:
                 st.error(f"⚠️ {err}")
-                st.session_state['z_values_for_geoid'] = None
-                return # エラーがあればここで処理を中断
             else:
-                st.session_state['z_values_for_geoid'] = z_values
-                st.rerun() # Z値を読み込んだらページを再実行して表示を更新
-        else:
-            return # ファイルがアップロードされるまで待機
+                st.session_state['z_values_for_geoid'] = z_values_fallback
+                st.rerun()
+        return # Z値がセットされるまで待機
 
     # --- .out ファイルのアップロードと処理 ---
-    st.subheader("ステップ2: ジオイド高結果 (.out) のアップロードとExcel生成")
+    st.subheader("ジオイド高結果 (.out) のアップロードとExcel生成")
     uploaded_out_file = st.file_uploader("ジオイド高結果ファイル (.out) を選択", type=['out'], key="out_file_uploader")
 
     if uploaded_out_file:
@@ -340,6 +298,7 @@ def geoid_excel_output_page():
 
             if len(z_values) != len(data_rows):
                 st.warning(f"⚠️ Z座標の数 ({len(z_values)}個) とジオイド高データの数 ({len(data_rows)}個) が一致しません。ファイルの内容を確認してください。")
+                return # 不一致の場合はここで止める
 
             # Z座標とジオイド高を結合して楕円体高を計算
             output_data = []
@@ -401,17 +360,9 @@ else:
         if input_method == "ファイルアップロード":
             st.info("Excel (.xlsx) または CSV (.csv) ファイルをアップロードしてください。")
             uploaded_file = st.file_uploader("ファイルを選択", type=['xlsx', 'csv', 'xls'])
-            # ファイルがアップロードされた瞬間にZ座標を抽出してsession_stateに保存
             if uploaded_file:
-                z_values, err = extract_z_from_file(uploaded_file)
-                if err:
-                    st.warning(f"Z座標の読み込みに失敗: {err}")
-                    st.session_state['z_values_for_geoid'] = None
-                else:
-                    st.success(f"✅ Z座標を{len(z_values)}個読み込みました。「ジオイド高結果Excel出力」ページで利用できます。")
-                    st.session_state['z_values_for_geoid'] = z_values
-                # アップロードされたファイルを再利用するためにリセットしない
-                # uploaded_file.seek(0) # 必要に応じて
+                # アップロードされたファイルをリセットして、複数回読めるようにする
+                uploaded_file.seek(0)
         else:
             coordinate_input_text = st.text_area(
                 '**X (Northing), Y (Easting), Z (標高)** の順で座標を入力してください。\n\n'
@@ -433,15 +384,22 @@ else:
             if input_method == "ファイルアップロード":
                 if uploaded_file:
                     with st.spinner('ファイルを処理中...'):
-                        coords, err = parse_coordinate_file(uploaded_file)
+                        # 新しい統一関数でファイルを解析
+                        coords, z_values, err = parse_coordinate_file(uploaded_file)
                     if err:
                         st.error(f"⚠️ {err}")
                     else:
                         coordinates_to_convert = coords
+                        # Z座標リストをセッションステートに保存
+                        st.session_state['z_values_for_geoid'] = z_values
+                        st.success(f"✅ {len(z_values)}個の座標（Z座標含む）を読み込みました。「ジオイド高結果Excel出力」ページで利用できます。")
                 else:
                     st.warning("⚠️ ファイルが選択されていません。")
             else:
                 coordinates_to_convert = parse_coordinate_text(coordinate_input_text)
+                # テキスト入力の場合もZ座標を抽出して保存
+                z_values_text = [c.get('z', 0.0) for c in coordinates_to_convert]
+                st.session_state['z_values_for_geoid'] = z_values_text
 
             if not coordinates_to_convert:
                 st.warning("⚠️ 変換対象の座標が見つかりませんでした。")
