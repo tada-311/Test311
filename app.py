@@ -168,7 +168,13 @@ def geoid_excel_output_page():
     if uploaded_out_file:
         try:
             # .out ファイルの内容を読み込み
-            content = uploaded_out_file.getvalue().decode('shift-jis') # Shift-JISでデコード
+            content_bytes = uploaded_out_file.getvalue()
+            try:
+                # まずUTF-8でデコードを試みる
+                content = content_bytes.decode('utf-8-sig') # BOM付きUTF-8に対応
+            except UnicodeDecodeError:
+                # UTF-8で失敗した場合、Shift-JISでデコードを試みる
+                content = content_bytes.decode('shift-jis')
             lines = content.splitlines()
 
             # ヘッダー行をスキップし、データ行を解析
